@@ -1,6 +1,6 @@
 // Package ml implements the Machine Learning engine for CLARA Phase 1.
 // Uses Bayesian Network inference with iterative belief propagation.
-// No recursion — all computation is iterative.
+// No recursion. Each call to Infer is fully isolated — beliefs are computed fresh.
 package ml
 
 import (
@@ -11,20 +11,20 @@ import (
 	"github.com/clara-phase1/kinds"
 )
 
-// Node is a Bayesian Network node.
+// Node defines a Bayesian Network node (structure only, no mutable state).
 type Node struct {
 	Name    string
-	States  []string            // possible states
-	Parents []string            // parent node names
-	CPT     map[string]float64  // conditional probability table: "parent_state|node_state" -> prob
-	Belief  map[string]float64  // current belief for each state
+	States  []string
+	Parents []string
+	CPT     map[string]float64 // "parent_state|node_state" -> probability
+	Prior   map[string]float64 // "|node_state" -> prior probability
 }
 
-// BayesNet is a Bayesian Network for ML inference.
+// BayesNet defines the network structure and parameters (immutable after construction).
 type BayesNet struct {
 	Nodes  map[string]*Node
-	Order  []string // topological order (pre-computed, no recursion needed)
-	Labels map[string]string // node_state -> class label
+	Order  []string          // topological order
+	Labels map[string]string // state -> class label
 }
 
 func NewBayesNet() *BayesNet {
@@ -34,22 +34,16 @@ func NewBayesNet() *BayesNet {
 	}
 }
 
-// AddNode adds a node to the network.
-func (bn *BayesNet) AddNode(name string, states []string, parents []string) *Node {
-	node := &Node{
+// AddNode adds a node to the network structure.
+func (bn *BayesNet) AddNode(name string, states []string, parents []string) {
+	bn.Nodes[name] = &Node{
 		Name:    name,
 		States:  states,
 		Parents: parents,
 		CPT:     make(map[string]float64),
-		Belief:  make(map[string]float64),
+		Prior:   make(map[string]float64),
 	}
-	// Initialize uniform belief
-	for _, s := range states {
-		node.Belief[s] = 1.0 / float64(len(states))
-	}
-	bn.Nodes[name] = node
 	bn.Order = append(bn.Order, name)
-	return node
 }
 
 // SetCPT sets a conditional probability entry.
@@ -58,25 +52,24 @@ func (bn *BayesNet) SetCPT(nodeName, parentState, nodeState string, prob float64
 	if !ok {
 		return
 	}
-	key := parentState + "|" + nodeState
-	node.CPT[key] = prob
+	node.CPT[parentState+"|"+nodeState] = prob
 }
 
-// SetPrior sets an unconditional probability for a root node.
+// SetPrior sets an unconditional prior for a root node.
 func (bn *BayesNet) SetPrior(nodeName, state string, prob float64) {
 	node, ok := bn.Nodes[nodeName]
 	if !ok {
 		return
 	}
-	node.CPT["|"+state] = prob
+	node.Prior[state] = prob
 }
 
-// SetLabel maps a node state to a classification label.
-func (bn *BayesNet) SetLabel(nodeState, label string) {
-	bn.Labels[nodeState] = label
+// SetLabel maps a state to a classification label.
+func (bn *BayesNet) SetLabel(state, label string) {
+	bn.Labels[state] = label
 }
 
-// Engine wraps the BayesNet for the CLARA agent framework.
+// Engine wraps a BayesNet for the CLARA agent framework.
 type Engine struct {
 	Net *BayesNet
 }
@@ -87,11 +80,47 @@ func NewEngine(net *BayesNet) *Engine {
 
 func (e *Engine) Name() string { return "BayesianNetwork-BeliefProp" }
 
-// Infer runs iterative belief propagation on the network given observed features.
+// beliefState holds per-inference beliefs. Created fresh per Infer call.
+type beliefState struct {
+	beliefs map[string]map[string]float64 // nodeName -> state -> probability
+}
+
+func newBeliefState(net *BayesNet) *beliefState {
+	bs := &beliefState{
+		beliefs: make(map[string]map[string]float64),
+	}
+	// Initialize all beliefs to uniform
+	for name, node := range net.Nodes {
+		bs.beliefs[name] = make(map[string]float64)
+		for _, s := range node.States {
+			bs.beliefs[name][s] = 1.0 / float64(len(node.States))
+		}
+	}
+	return bs
+}
+
+func (bs *beliefState) normalize(nodeName string, states []string) {
+	total := 0.0
+	for _, s := range states {
+		total += bs.beliefs[nodeName][s]
+	}
+	if total > 0 && !math.IsNaN(total) && !math.IsInf(total, 0) {
+		for _, s := range states {
+			bs.beliefs[nodeName][s] /= total
+		}
+	}
+}
+
+// Infer runs fully isolated belief propagation on a single datum.
+// Creates fresh belief state — no state persists between calls.
 func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 	net := e.Net
+	bs := newBeliefState(net)
 
-	// Step 1: Set evidence from datum features (iterative)
+	proofTrace := make([]string, 0, len(net.Order)+2)
+	proofTrace = append(proofTrace, fmt.Sprintf("evidence: %d features observed", len(datum.Features)))
+
+	// Step 1: Set evidence from datum features
 	featureKeys := make([]string, 0, len(datum.Features))
 	for k := range datum.Features {
 		featureKeys = append(featureKeys, k)
@@ -104,78 +133,68 @@ func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 		if !ok {
 			continue
 		}
-		// Set observed evidence: update beliefs based on feature value
-		for si := 0; si < len(node.States); si++ {
-			state := node.States[si]
+		for _, state := range node.States {
 			if state == "high" && fval > 0.5 {
-				node.Belief[state] = fval
+				bs.beliefs[fname][state] = fval
 			} else if state == "low" && fval <= 0.5 {
-				node.Belief[state] = 1.0 - fval
-			} else {
-				node.Belief[state] = 0.1 // small residual
+				bs.beliefs[fname][state] = 1.0 - fval
+			} else if state == "high" && fval <= 0.5 {
+				bs.beliefs[fname][state] = fval // low confidence for high
+			} else if state == "low" && fval > 0.5 {
+				bs.beliefs[fname][state] = 1.0 - fval // low confidence for low
 			}
 		}
+		bs.normalize(fname, node.States)
 	}
 
-	// Step 2: Iterative belief propagation (forward pass along topological order)
-	// No recursion — iterate through pre-computed topological order
-	proofTrace := make([]string, 0, len(net.Order)+2)
-	proofTrace = append(proofTrace, fmt.Sprintf("evidence: %d features observed", len(datum.Features)))
-
+	// Step 2: Forward belief propagation along topological order (iterative)
 	for oi := 0; oi < len(net.Order); oi++ {
 		nodeName := net.Order[oi]
 		node := net.Nodes[nodeName]
 
 		if len(node.Parents) == 0 {
-			// Root node: use prior or evidence
-			hasCPT := false
+			// Root node: combine evidence with prior using Bayesian update
+			hasPrior := false
 			for _, s := range node.States {
-				key := "|" + s
-				if p, ok := node.CPT[key]; ok {
-					// Combine prior with evidence using Bayesian update
-					node.Belief[s] = node.Belief[s] * p
-					hasCPT = true
+				if p, ok := node.Prior[s]; ok {
+					bs.beliefs[nodeName][s] *= p
+					hasPrior = true
 				}
 			}
-			if hasCPT {
-				normalize(node)
-				proofTrace = append(proofTrace, fmt.Sprintf("prior(%s): beliefs updated", nodeName))
+			if hasPrior {
+				bs.normalize(nodeName, node.States)
+				proofTrace = append(proofTrace,
+					fmt.Sprintf("prior(%s): P(high)=%.3f P(low)=%.3f",
+						nodeName, bs.beliefs[nodeName]["high"], bs.beliefs[nodeName]["low"]))
 			}
 			continue
 		}
 
-		// Non-root: propagate beliefs from parents iteratively
-		for si := 0; si < len(node.States); si++ {
-			state := node.States[si]
+		// Non-root: propagate from parents
+		for _, state := range node.States {
 			totalProb := 0.0
-
-			// Sum over all parent state combinations (iterative)
-			for pi := 0; pi < len(node.Parents); pi++ {
-				parentName := node.Parents[pi]
+			for _, parentName := range node.Parents {
 				parent, ok := net.Nodes[parentName]
 				if !ok {
 					continue
 				}
-
 				for _, pState := range parent.States {
 					key := pState + "|" + state
 					cpt, ok := node.CPT[key]
 					if !ok {
-						cpt = 1.0 / float64(len(node.States)) // uniform default
+						cpt = 1.0 / float64(len(node.States))
 					}
-					totalProb += cpt * parent.Belief[pState]
+					totalProb += cpt * bs.beliefs[parentName][pState]
 				}
 			}
-
 			if totalProb > 0 {
-				node.Belief[state] = totalProb
+				bs.beliefs[nodeName][state] = totalProb
 			}
 		}
-
-		normalize(node)
+		bs.normalize(nodeName, node.States)
 		proofTrace = append(proofTrace,
 			fmt.Sprintf("propagate(%s): P(high)=%.3f P(low)=%.3f",
-				nodeName, node.Belief["high"], node.Belief["low"]))
+				nodeName, bs.beliefs[nodeName]["high"], bs.beliefs[nodeName]["low"]))
 	}
 
 	// Step 3: Extract prediction from output node (last in topological order)
@@ -184,13 +203,12 @@ func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 
 	if len(net.Order) > 0 {
 		outputName := net.Order[len(net.Order)-1]
-		outputNode := net.Nodes[outputName]
 
 		bestState := ""
 		bestProb := 0.0
-		for _, s := range outputNode.States {
-			if outputNode.Belief[s] > bestProb {
-				bestProb = outputNode.Belief[s]
+		for _, s := range net.Nodes[outputName].States {
+			if bs.beliefs[outputName][s] > bestProb {
+				bestProb = bs.beliefs[outputName][s]
 				bestState = s
 			}
 		}
@@ -200,30 +218,12 @@ func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 		} else {
 			prediction = bestState
 		}
-		confidence = bestProb
+		confidence = clamp(bestProb, 0.0, 1.0)
 		proofTrace = append(proofTrace,
 			fmt.Sprintf("conclusion: %s=P(%.3f) via %s", prediction, confidence, outputName))
 	}
 
-	return kinds.ModelResult{
-		Prediction: prediction,
-		Confidence: clamp(confidence, 0.0, 1.0),
-		Kind:       kinds.KindBayesNets,
-		ProofTrace: proofTrace,
-	}, nil
-}
-
-// normalize ensures beliefs in a node sum to 1.
-func normalize(node *Node) {
-	total := 0.0
-	for _, s := range node.States {
-		total += node.Belief[s]
-	}
-	if total > 0 && !math.IsNaN(total) && !math.IsInf(total, 0) {
-		for _, s := range node.States {
-			node.Belief[s] /= total
-		}
-	}
+	return kinds.NewModelResult(prediction, confidence, kinds.KindBayesNets, proofTrace), nil
 }
 
 func clamp(v, lo, hi float64) float64 {
@@ -234,13 +234,4 @@ func clamp(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
-}
-
-// ResetBeliefs resets all node beliefs to uniform for a new inference.
-func (e *Engine) ResetBeliefs() {
-	for _, node := range e.Net.Nodes {
-		for _, s := range node.States {
-			node.Belief[s] = 1.0 / float64(len(node.States))
-		}
-	}
 }

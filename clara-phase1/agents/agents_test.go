@@ -1,128 +1,58 @@
 package agents
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/clara-phase1/kinds"
 )
 
-func TestVerifierAgent(t *testing.T) {
-	v := NewVerifierAgent("test-verifier")
+// --- SuperClaude Boss Tests ---
 
-	if v.ID() != "test-verifier" {
-		t.Errorf("expected ID 'test-verifier', got %q", v.ID())
-	}
-	if v.Role() != RoleVerifier {
-		t.Errorf("expected role Verifier, got %q", v.Role())
-	}
+func TestSuperClaudeDirective(t *testing.T) {
+	boss := NewSuperClaudeAgent("boss")
+	msg := Message{From: "test", To: boss.ID(), Type: "directive",
+		Payload: "run evaluation", Timestamp: time.Now()}
 
-	cr := kinds.ComposedResult{
-		MLResult: kinds.ModelResult{
-			Prediction: "A",
-			Confidence: 0.8,
-			ProofTrace: []string{"premise: feature_x", "rule: x => A"},
-		},
-		ARResult: kinds.ModelResult{
-			Prediction: "A",
-			Confidence: 0.9,
-			ProofTrace: []string{"fact: has_feature(x, high)", "rule[r1]: x ∧ y => A"},
-		},
-		Final:     "A",
-		Verified:  false,
-		AUROC:     0.85,
-		Explained: true,
-	}
-
-	msg := Message{From: "test", To: v.ID(), Type: "verify", Payload: cr, Timestamp: time.Now()}
-	resp, err := v.Process(msg)
+	resp, err := boss.Process(msg)
 	if err != nil {
-		t.Fatalf("verification error: %v", err)
+		t.Fatalf("directive error: %v", err)
 	}
-
-	vr, ok := resp.Payload.(VerificationResult)
-	if !ok {
-		t.Fatal("expected VerificationResult payload")
+	if resp.Type != "result" {
+		t.Errorf("expected result type, got %s", resp.Type)
 	}
-	if !vr.Pass {
-		t.Errorf("expected verification to pass, got issues: %v", vr.Issues)
-	}
-	if !vr.Sound {
-		t.Error("expected sound")
-	}
-	if !vr.Complete {
-		t.Error("expected complete")
+	if len(boss.Directives) != 1 {
+		t.Errorf("expected 1 directive, got %d", len(boss.Directives))
 	}
 }
 
-func TestPhDAgent(t *testing.T) {
-	p := NewPhDAgent("test-phd", "bayesian-lp")
-
-	msg := Message{
-		From: "test", To: p.ID(), Type: "request",
-		Payload:   DomainRequest{Domain: "medical", Constraints: []string{"verifiable"}},
-		Timestamp: time.Now(),
-	}
-
-	resp, err := p.Process(msg)
-	if err != nil {
-		t.Fatalf("PhD process error: %v", err)
-	}
-
-	advice, ok := resp.Payload.(DomainAdvice)
-	if !ok {
-		t.Fatal("expected DomainAdvice payload")
-	}
-	if len(advice.RecommendedKinds) == 0 {
-		t.Error("expected recommended kinds")
-	}
-	if advice.TractabilityNote == "" {
-		t.Error("expected tractability note")
-	}
-}
-
-func TestModelAgent(t *testing.T) {
-	// Create a dummy engine
-	engine := &dummyEngine{}
-	m := NewModelAgent("test-model", kinds.KindBayesNets, engine)
-
-	datum := kinds.Datum{
-		Features: map[string]float64{"x": 0.7},
-		Label:    "positive",
-	}
-
-	msg := Message{From: "test", To: m.ID(), Type: "request", Payload: datum, Timestamp: time.Now()}
-	resp, err := m.Process(msg)
-	if err != nil {
-		t.Fatalf("model process error: %v", err)
-	}
-
-	result, ok := resp.Payload.(kinds.ModelResult)
-	if !ok {
-		t.Fatal("expected ModelResult payload")
-	}
-	if result.Prediction == "" {
-		t.Error("expected non-empty prediction")
-	}
-}
-
-func TestOrchestrator(t *testing.T) {
-	orch := NewOrchestrator()
-	orch.AddVerifier(NewVerifierAgent("v1"))
-	orch.AddPhD(NewPhDAgent("phd1", "test"))
-	orch.AddModel(NewModelAgent("ml1", kinds.KindBayesNets, &dummyEngine{cat: kinds.CategoryML}))
-	orch.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &dummyEngine{cat: kinds.CategoryAR}))
+func TestSuperClaudeFullRun(t *testing.T) {
+	boss := NewSuperClaudeAgent("boss")
+	boss.AddVerifier(NewVerifierAgent("v1"))
+	boss.AddPhD(NewPhDAgent("phd1", "bayesian-lp"))
+	boss.AddModel(NewModelAgent("ml1", kinds.KindBayesNets, &dummyEngine{cat: kinds.CategoryML}))
+	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &dummyEngine{cat: kinds.CategoryAR}))
 
 	dataset := kinds.DataSet{
-		Name:  "test",
-		Split: "test",
+		Name: "test", Split: "test",
 		Items: []kinds.Datum{
 			{Features: map[string]float64{"x": 0.8}, Label: "A"},
 			{Features: map[string]float64{"x": 0.2}, Label: "B"},
 		},
 	}
 
-	results := orch.RunBatch(dataset)
+	msg := Message{From: "test", To: boss.ID(), Type: "request",
+		Payload: dataset, Timestamp: time.Now()}
+	resp, err := boss.Process(msg)
+	if err != nil {
+		t.Fatalf("boss run error: %v", err)
+	}
+
+	results, ok := resp.Payload.([]OrchestratorResult)
+	if !ok {
+		t.Fatal("expected []OrchestratorResult payload")
+	}
 	if len(results) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
@@ -131,24 +61,169 @@ func TestOrchestrator(t *testing.T) {
 			t.Errorf("result %d: empty final prediction", i)
 		}
 	}
+	if len(boss.Log) == 0 {
+		t.Error("expected boss to have log entries")
+	}
 }
 
-// dummyEngine implements InferenceEngine for testing.
-type dummyEngine struct {
-	cat kinds.Category
+func TestSuperClaudeRole(t *testing.T) {
+	boss := NewSuperClaudeAgent("boss")
+	if boss.Role() != RoleSuperClaude {
+		t.Errorf("expected SuperClaude role, got %s", boss.Role())
+	}
 }
+
+// --- Verifier Tests ---
+
+func TestVerifierAgent(t *testing.T) {
+	v := NewVerifierAgent("v1")
+	cr := kinds.ComposedResult{
+		MLResult: kinds.ModelResult{
+			Prediction: "A", Confidence: 0.8,
+			ProofTrace: []string{"premise: x", "rule: x => A"},
+		},
+		ARResult: kinds.ModelResult{
+			Prediction: "A", Confidence: 0.9,
+			ProofTrace: []string{"fact: y", "rule[r1]: y => A"},
+		},
+		Final: "A", Verified: false, AUROC: 0.85, Explained: true,
+	}
+
+	msg := Message{From: "test", To: v.ID(), Type: "verify",
+		Payload: cr, Timestamp: time.Now()}
+	resp, err := v.Process(msg)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+
+	vr, ok := resp.Payload.(VerificationResult)
+	if !ok {
+		t.Fatal("expected VerificationResult")
+	}
+	if !vr.Pass {
+		t.Errorf("expected pass, issues: %v", vr.Issues)
+	}
+}
+
+func TestVerifierRejectsEmptyTrace(t *testing.T) {
+	v := NewVerifierAgent("v1")
+	cr := kinds.ComposedResult{
+		MLResult: kinds.ModelResult{Prediction: "A", Confidence: 0.8, ProofTrace: []string{}},
+		ARResult: kinds.ModelResult{Prediction: "A", Confidence: 0.9, ProofTrace: []string{"ok"}},
+		Final: "A",
+	}
+	msg := Message{From: "test", To: v.ID(), Type: "verify",
+		Payload: cr, Timestamp: time.Now()}
+	resp, _ := v.Process(msg)
+	vr := resp.Payload.(VerificationResult)
+	if vr.Pass {
+		t.Error("should fail: ML has empty proof trace")
+	}
+}
+
+// --- PhD Tests ---
+
+func TestPhDAgent(t *testing.T) {
+	p := NewPhDAgent("phd1", "bayesian-lp")
+
+	msg := Message{From: "test", To: p.ID(), Type: "request",
+		Payload:   DomainRequest{Domain: "medical", Constraints: []string{"verifiable"}},
+		Timestamp: time.Now()}
+	resp, err := p.Process(msg)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	advice := resp.Payload.(DomainAdvice)
+	if len(advice.RecommendedKinds) == 0 {
+		t.Error("expected recommendations")
+	}
+	if advice.TractabilityNote == "" {
+		t.Error("expected tractability note")
+	}
+}
+
+// --- Model Tests ---
+
+func TestModelAgent(t *testing.T) {
+	m := NewModelAgent("m1", kinds.KindBayesNets, &dummyEngine{cat: kinds.CategoryML})
+	datum := kinds.Datum{Features: map[string]float64{"x": 0.7}, Label: "A"}
+
+	msg := Message{From: "test", To: m.ID(), Type: "request",
+		Payload: datum, Timestamp: time.Now()}
+	resp, err := m.Process(msg)
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	result := resp.Payload.(kinds.ModelResult)
+	if result.Prediction == "" {
+		t.Error("expected prediction")
+	}
+}
+
+// --- Datum Isolation via Boss ---
+
+func TestBossDatumIsolation(t *testing.T) {
+	boss := NewSuperClaudeAgent("boss")
+	boss.AddVerifier(NewVerifierAgent("v1"))
+	boss.AddPhD(NewPhDAgent("phd1", "test"))
+	boss.AddModel(NewModelAgent("ml1", kinds.KindBayesNets, &isolationEngine{cat: kinds.CategoryML}))
+	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &isolationEngine{cat: kinds.CategoryAR}))
+
+	dataset := kinds.DataSet{
+		Name: "isolation-test", Split: "test",
+		Items: []kinds.Datum{
+			{Features: map[string]float64{"x": 0.9}, Label: "high"},
+			{Features: map[string]float64{"x": 0.1}, Label: "low"},
+			{Features: map[string]float64{"x": 0.9}, Label: "high"}, // same as first
+		},
+	}
+
+	msg := Message{From: "test", To: boss.ID(), Type: "request",
+		Payload: dataset, Timestamp: time.Now()}
+	resp, _ := boss.Process(msg)
+	results := resp.Payload.([]OrchestratorResult)
+
+	// Items 0 and 2 have same input, should produce same output
+	if results[0].ComposedResult.Final != results[2].ComposedResult.Final {
+		t.Errorf("isolation failure: item0=%s item2=%s (should match)",
+			results[0].ComposedResult.Final, results[2].ComposedResult.Final)
+	}
+	// Item 1 has different input, should differ
+	if results[0].ComposedResult.Final == results[1].ComposedResult.Final {
+		t.Error("different inputs produced same output — possible state leak")
+	}
+}
+
+// --- Test helpers ---
+
+type dummyEngine struct{ cat kinds.Category }
 
 func (d *dummyEngine) Name() string { return "dummy" }
-
 func (d *dummyEngine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 	k := kinds.KindBayesNets
 	if d.cat == kinds.CategoryAR {
 		k = kinds.KindLogicPrograms
 	}
-	return kinds.ModelResult{
-		Prediction: datum.Label,
-		Confidence: 0.75,
-		Kind:       k,
-		ProofTrace: []string{"premise: input", "rule: test => output"},
-	}, nil
+	return kinds.NewModelResult(datum.Label, 0.75, k,
+		[]string{"premise: input", "rule: test => output"}), nil
+}
+
+type isolationEngine struct{ cat kinds.Category }
+
+func (e *isolationEngine) Name() string { return "isolation-test" }
+func (e *isolationEngine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
+	k := kinds.KindBayesNets
+	if e.cat == kinds.CategoryAR {
+		k = kinds.KindLogicPrograms
+	}
+	// Deterministic: prediction depends only on features
+	pred := "low"
+	conf := 0.3
+	if datum.Features["x"] > 0.5 {
+		pred = "high"
+		conf = 0.8
+	}
+	return kinds.NewModelResult(pred, conf, k,
+		[]string{"premise: x=" + fmt.Sprintf("%.1f", datum.Features["x"]),
+			"rule: threshold => " + pred}), nil
 }

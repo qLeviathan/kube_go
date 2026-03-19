@@ -1,7 +1,7 @@
 // Package compose implements the AR+ML composition pipeline for CLARA Phase 1.
-// Phase 1 requirement: ≥1 ML & ≥1 AR kind tightly composed.
-// Polynomial-time inferencing guaranteed.
-// No recursion.
+// Phase 1 requirement: >=1 ML & >=1 AR kind tightly composed.
+// Polynomial-time inferencing. No recursion.
+// Each datum inference is fully isolated — engines handle their own state.
 package compose
 
 import (
@@ -13,54 +13,48 @@ import (
 	"github.com/clara-phase1/kinds"
 )
 
-// Pipeline defines a composed AR+ML inference pipeline.
-type Pipeline struct {
-	Name       string
-	MLEngine   agents.InferenceEngine
-	AREngine   agents.InferenceEngine
-	MLKind     kinds.Kind
-	ARKind     kinds.Kind
-	Strategy   CompositionStrategy
-}
-
 // CompositionStrategy defines how ML and AR results are combined.
 type CompositionStrategy string
 
 const (
-	StrategyARPriority     CompositionStrategy = "ar_priority"      // AR overrides on disagreement
-	StrategyWeightedFusion CompositionStrategy = "weighted_fusion"  // weighted average
-	StrategyConsensus      CompositionStrategy = "consensus"        // must agree
+	StrategyARPriority     CompositionStrategy = "ar_priority"
+	StrategyWeightedFusion CompositionStrategy = "weighted_fusion"
+	StrategyConsensus      CompositionStrategy = "consensus"
 )
 
-// NewPipeline creates a composed ML+AR pipeline.
-func NewPipeline(name string, mlEngine, arEngine agents.InferenceEngine, mlKind, arKind kinds.Kind, strategy CompositionStrategy) *Pipeline {
+// Pipeline defines a composed AR+ML inference pipeline.
+type Pipeline struct {
+	Name     string
+	MLEngine agents.InferenceEngine
+	AREngine agents.InferenceEngine
+	MLKind   kinds.Kind
+	ARKind   kinds.Kind
+	Strategy CompositionStrategy
+}
+
+func NewPipeline(name string, mlEngine, arEngine agents.InferenceEngine,
+	mlKind, arKind kinds.Kind, strategy CompositionStrategy) *Pipeline {
 	return &Pipeline{
-		Name:     name,
-		MLEngine: mlEngine,
-		AREngine: arEngine,
-		MLKind:   mlKind,
-		ARKind:   arKind,
-		Strategy: strategy,
+		Name: name, MLEngine: mlEngine, AREngine: arEngine,
+		MLKind: mlKind, ARKind: arKind, Strategy: strategy,
 	}
 }
 
-// InferComposed runs the full composed inference on a datum.
+// InferComposed runs fully isolated ML and AR inference on one datum, then composes.
 func (p *Pipeline) InferComposed(datum kinds.Datum) (kinds.ComposedResult, error) {
-	// Step 1: ML inference
+	// Each engine's Infer creates fresh internal state — no reset needed
 	mlResult, err := p.MLEngine.Infer(datum)
 	if err != nil {
 		return kinds.ComposedResult{}, fmt.Errorf("ml inference: %w", err)
 	}
 	mlResult.Kind = p.MLKind
 
-	// Step 2: AR inference
 	arResult, err := p.AREngine.Infer(datum)
 	if err != nil {
 		return kinds.ComposedResult{}, fmt.Errorf("ar inference: %w", err)
 	}
 	arResult.Kind = p.ARKind
 
-	// Step 3: Compose based on strategy
 	composed := kinds.ComposedResult{
 		MLResult:  mlResult,
 		ARResult:  arResult,
@@ -69,44 +63,41 @@ func (p *Pipeline) InferComposed(datum kinds.Datum) (kinds.ComposedResult, error
 
 	switch p.Strategy {
 	case StrategyARPriority:
-		composed = p.composeARPriority(composed)
+		return composeARPriority(composed), nil
 	case StrategyWeightedFusion:
-		composed = p.composeWeightedFusion(composed)
+		return composeWeightedFusion(composed), nil
 	case StrategyConsensus:
-		composed = p.composeConsensus(composed)
+		return composeConsensus(composed), nil
 	default:
-		composed = p.composeARPriority(composed)
+		return composeARPriority(composed), nil
 	}
-
-	return composed, nil
 }
 
-func (p *Pipeline) composeARPriority(cr kinds.ComposedResult) kinds.ComposedResult {
+func composeARPriority(cr kinds.ComposedResult) kinds.ComposedResult {
 	if cr.MLResult.Prediction == cr.ARResult.Prediction {
 		cr.Final = cr.MLResult.Prediction
 		cr.AUROC = (cr.MLResult.Confidence + cr.ARResult.Confidence) / 2.0
 	} else {
-		cr.Final = cr.ARResult.Prediction
+		cr.Final = cr.ARResult.Prediction // AR gets priority (higher assurance)
 		cr.AUROC = cr.ARResult.Confidence*0.7 + cr.MLResult.Confidence*0.3
 	}
 	cr.Verified = cr.ARResult.Confidence > 0.3
 	return cr
 }
 
-func (p *Pipeline) composeWeightedFusion(cr kinds.ComposedResult) kinds.ComposedResult {
-	mlWeight := 0.4
-	arWeight := 0.6
-	if cr.MLResult.Confidence*mlWeight >= cr.ARResult.Confidence*arWeight {
+func composeWeightedFusion(cr kinds.ComposedResult) kinds.ComposedResult {
+	mlW, arW := 0.4, 0.6
+	if cr.MLResult.Confidence*mlW >= cr.ARResult.Confidence*arW {
 		cr.Final = cr.MLResult.Prediction
 	} else {
 		cr.Final = cr.ARResult.Prediction
 	}
-	cr.AUROC = cr.MLResult.Confidence*mlWeight + cr.ARResult.Confidence*arWeight
+	cr.AUROC = cr.MLResult.Confidence*mlW + cr.ARResult.Confidence*arW
 	cr.Verified = cr.AUROC > 0.4
 	return cr
 }
 
-func (p *Pipeline) composeConsensus(cr kinds.ComposedResult) kinds.ComposedResult {
+func composeConsensus(cr kinds.ComposedResult) kinds.ComposedResult {
 	if cr.MLResult.Prediction == cr.ARResult.Prediction {
 		cr.Final = cr.MLResult.Prediction
 		cr.AUROC = (cr.MLResult.Confidence + cr.ARResult.Confidence) / 2.0
@@ -119,23 +110,17 @@ func (p *Pipeline) composeConsensus(cr kinds.ComposedResult) kinds.ComposedResul
 	return cr
 }
 
-// RunBatch processes an entire dataset through the pipeline iteratively.
+// RunBatch processes a dataset. Each datum gets a fresh isolated inference.
 func (p *Pipeline) RunBatch(dataset kinds.DataSet) ([]kinds.ComposedResult, BatchMetrics) {
 	results := make([]kinds.ComposedResult, 0, len(dataset.Items))
-
 	for i := 0; i < len(dataset.Items); i++ {
 		cr, err := p.InferComposed(dataset.Items[i])
 		if err != nil {
-			cr = kinds.ComposedResult{
-				Final:    "error",
-				Verified: false,
-			}
+			cr = kinds.ComposedResult{Final: "error", Verified: false}
 		}
 		results = append(results, cr)
 	}
-
-	metrics := ComputeBatchMetrics(results, dataset)
-	return results, metrics
+	return results, ComputeBatchMetrics(results, dataset)
 }
 
 // BatchMetrics summarizes pipeline performance on a dataset.
@@ -150,13 +135,11 @@ type BatchMetrics struct {
 	ExplainRate    float64
 }
 
-// ComputeBatchMetrics calculates Phase 1 metrics from results.
 func ComputeBatchMetrics(results []kinds.ComposedResult, dataset kinds.DataSet) BatchMetrics {
 	m := BatchMetrics{TotalItems: len(results)}
 	if m.TotalItems == 0 {
 		return m
 	}
-
 	totalAUROC := 0.0
 	for i := 0; i < len(results); i++ {
 		cr := results[i]
@@ -171,7 +154,6 @@ func ComputeBatchMetrics(results []kinds.ComposedResult, dataset kinds.DataSet) 
 		}
 		totalAUROC += cr.AUROC
 	}
-
 	m.Accuracy = float64(m.CorrectCount) / float64(m.TotalItems)
 	m.MeanAUROC = totalAUROC / float64(m.TotalItems)
 	m.VerifyRate = float64(m.VerifiedCount) / float64(m.TotalItems)
@@ -181,69 +163,50 @@ func ComputeBatchMetrics(results []kinds.ComposedResult, dataset kinds.DataSet) 
 
 // EvaluatePhase1Metrics checks all Phase 1 metric targets.
 func EvaluatePhase1Metrics(bm BatchMetrics, soaAUROC float64) []kinds.Metric {
-	metrics := make([]kinds.Metric, 0, 5)
+	metrics := make([]kinds.Metric, 0, 6)
 
-	// Metric 1: Verifiability without loss of performance
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Verifiability",
-		Value:  bm.VerifyRate,
-		Target: 1.0,
+		Name: "Verifiability", Value: bm.VerifyRate, Target: 1.0,
 		Pass:   bm.VerifyRate >= 0.95,
-		Detail: fmt.Sprintf("Fully verifiable: %.1f%% of results verified (target: 100%%)", bm.VerifyRate*100),
+		Detail: fmt.Sprintf("%.1f%% verified (target: 100%%)", bm.VerifyRate*100),
 	})
 
-	// Metric 2: Error rate ≤ SOA
-	claraError := 1.0 - bm.Accuracy
-	soaError := 1.0 - soaAUROC
+	claraErr := 1.0 - bm.Accuracy
+	soaErr := 1.0 - soaAUROC
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Error Rate ≤ SOA",
-		Value:  claraError,
-		Target: soaError,
-		Pass:   claraError <= soaError+0.05, // 5% tolerance
-		Detail: fmt.Sprintf("CLARA error=%.4f SOA error=%.4f", claraError, soaError),
+		Name: "Error Rate <= SOA", Value: claraErr, Target: soaErr,
+		Pass:   claraErr <= soaErr+0.05,
+		Detail: fmt.Sprintf("CLARA error=%.4f SOA error=%.4f", claraErr, soaErr),
 	})
 
-	// Metric 3: Multiplicity of AI Kinds (Phase 1: ≥1 ML & ≥1 AR)
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Kind Multiplicity",
-		Value:  2.0, // 1 ML + 1 AR
-		Target: 2.0,
+		Name: "Kind Multiplicity", Value: 2.0, Target: 2.0,
 		Pass:   true,
-		Detail: "Phase 1: ≥1 ML (Bayesian Networks) & ≥1 AR (Logic Programs)",
+		Detail: "Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)",
 	})
 
-	// Metric 4: Polynomial time inferencing
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Polynomial Inferencing",
-		Value:  1.0,
-		Target: 1.0,
-		Pass:   true, // forward chaining + belief propagation are polynomial
-		Detail: "Forward-chaining O(R*F^B) + Belief propagation O(N*S^P) — both polynomial",
+		Name: "Polynomial Inferencing", Value: 1.0, Target: 1.0,
+		Pass:   true,
+		Detail: "Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)",
 	})
 
-	// Metric 5: Composed task reliability > SOA
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Composed AUROC > SOA",
-		Value:  bm.MeanAUROC,
-		Target: soaAUROC,
+		Name: "Composed AUROC > SOA", Value: bm.MeanAUROC, Target: soaAUROC,
 		Pass:   bm.MeanAUROC >= soaAUROC-0.05,
 		Detail: fmt.Sprintf("CLARA AUROC=%.4f vs SOA=%.4f", bm.MeanAUROC, soaAUROC),
 	})
 
-	// Metric 6: Explainability
 	metrics = append(metrics, kinds.Metric{
-		Name:   "Logical Explainability",
-		Value:  bm.ExplainRate,
-		Target: 1.0,
+		Name: "Logical Explainability", Value: bm.ExplainRate, Target: 1.0,
 		Pass:   bm.ExplainRate >= 0.90,
-		Detail: fmt.Sprintf("%.1f%% of results have hierarchical natural-deduction proofs", bm.ExplainRate*100),
+		Detail: fmt.Sprintf("%.1f%% have hierarchical natural-deduction proofs", bm.ExplainRate*100),
 	})
 
 	return metrics
 }
 
-// ComputeAUROC computes Area Under ROC Curve from scored predictions.
-// Iterative trapezoidal approximation (no recursion).
+// ComputeAUROC computes Area Under ROC Curve iteratively.
 func ComputeAUROC(predictions []kinds.ComposedResult, dataset kinds.DataSet) float64 {
 	if len(predictions) == 0 || len(dataset.Items) == 0 {
 		return 0.0
@@ -253,7 +216,6 @@ func ComputeAUROC(predictions []kinds.ComposedResult, dataset kinds.DataSet) flo
 		score    float64
 		positive bool
 	}
-
 	items := make([]scored, 0, len(predictions))
 	for i := 0; i < len(predictions) && i < len(dataset.Items); i++ {
 		items = append(items, scored{
@@ -261,14 +223,9 @@ func ComputeAUROC(predictions []kinds.ComposedResult, dataset kinds.DataSet) flo
 			positive: predictions[i].Final == dataset.Items[i].Label,
 		})
 	}
+	sort.Slice(items, func(i, j int) bool { return items[i].score > items[j].score })
 
-	// Sort by score descending
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].score > items[j].score
-	})
-
-	totalPos := 0
-	totalNeg := 0
+	totalPos, totalNeg := 0, 0
 	for i := 0; i < len(items); i++ {
 		if items[i].positive {
 			totalPos++
@@ -280,13 +237,9 @@ func ComputeAUROC(predictions []kinds.ComposedResult, dataset kinds.DataSet) flo
 		return 0.5
 	}
 
-	// Trapezoidal AUROC computation (iterative)
 	auc := 0.0
-	tp := 0
-	fp := 0
-	prevTPR := 0.0
-	prevFPR := 0.0
-
+	tp, fp := 0, 0
+	prevTPR, prevFPR := 0.0, 0.0
 	for i := 0; i < len(items); i++ {
 		if items[i].positive {
 			tp++
@@ -299,6 +252,5 @@ func ComputeAUROC(predictions []kinds.ComposedResult, dataset kinds.DataSet) flo
 		prevTPR = tpr
 		prevFPR = fpr
 	}
-
 	return math.Max(0.0, math.Min(1.0, auc))
 }

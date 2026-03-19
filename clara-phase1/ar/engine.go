@@ -1,6 +1,6 @@
 // Package ar implements the Automated Reasoning engine for CLARA Phase 1.
 // Uses Logic Programs (LP) with iterative forward-chaining inference.
-// No recursion — all inference is done via worklist iteration.
+// No recursion. Each call to Infer is fully isolated — state is scoped per call.
 package ar
 
 import (
@@ -43,115 +43,124 @@ func (r Rule) String() string {
 	return fmt.Sprintf("%s :- %s.", r.Head, strings.Join(bodyStrs, ", "))
 }
 
-// KnowledgeBase holds facts and rules for the LP engine.
+// KnowledgeBase holds permanent rules and label mappings.
+// Facts are NOT stored here — they are per-inference.
 type KnowledgeBase struct {
-	Facts []Atom
-	Rules []Rule
+	Rules  []Rule
+	Labels map[string]string // derived atom string -> class label
 }
 
 // Engine is the AR inference engine using forward-chaining on Logic Programs.
+// The engine holds permanent rules/labels. Per-inference state (facts, derived atoms)
+// is created fresh on every call to Infer — no state bleeds between calls.
 type Engine struct {
-	KB          KnowledgeBase
-	Derived     map[string]bool // set of derived atom strings
-	ProofTraces map[string][]string
-	Labels      map[string]string // atom -> class label mapping
+	KB KnowledgeBase
 }
 
+// NewEngine creates an AR engine with empty rules and labels.
 func NewEngine() *Engine {
 	return &Engine{
-		Derived:     make(map[string]bool),
-		ProofTraces: make(map[string][]string),
-		Labels:      make(map[string]string),
+		KB: KnowledgeBase{
+			Labels: make(map[string]string),
+		},
 	}
 }
 
 func (e *Engine) Name() string { return "LogicPrograms-ForwardChain" }
 
-// AddFact adds a ground fact to the knowledge base.
-func (e *Engine) AddFact(pred string, args ...string) {
-	atom := Atom{Predicate: pred, Args: args}
-	e.KB.Facts = append(e.KB.Facts, atom)
-}
-
-// AddRule adds an inference rule.
+// AddRule adds a permanent inference rule.
 func (e *Engine) AddRule(id string, head Atom, body ...Atom) {
 	e.KB.Rules = append(e.KB.Rules, Rule{ID: id, Head: head, Body: body})
 }
 
-// SetLabel maps an atom string to a classification label.
+// SetLabel maps a derived atom string to a classification label.
 func (e *Engine) SetLabel(atomStr, label string) {
-	e.Labels[atomStr] = label
+	e.KB.Labels[atomStr] = label
 }
 
-// ForwardChain runs iterative forward-chaining until fixpoint.
-// Worst-case polynomial: O(rules * facts^maxBodySize) per iteration, bounded iterations.
-// No recursion used — pure worklist algorithm.
-func (e *Engine) ForwardChain() {
-	// Initialize with facts
-	for i := 0; i < len(e.KB.Facts); i++ {
-		key := e.KB.Facts[i].String()
-		e.Derived[key] = true
-		e.ProofTraces[key] = []string{fmt.Sprintf("fact: %s", key)}
+// inferState holds per-inference ephemeral state. Created fresh per Infer call.
+type inferState struct {
+	facts       []Atom
+	derived     map[string]bool
+	proofTraces map[string][]string
+}
+
+func newInferState() *inferState {
+	return &inferState{
+		derived:     make(map[string]bool),
+		proofTraces: make(map[string][]string),
+	}
+}
+
+// addFact adds a ground fact to this inference's state.
+func (s *inferState) addFact(pred string, args ...string) {
+	atom := Atom{Predicate: pred, Args: args}
+	s.facts = append(s.facts, atom)
+}
+
+// forwardChain runs iterative forward-chaining until fixpoint.
+// Worst-case polynomial: O(iterations * rules * facts^maxBodySize).
+// No recursion — pure worklist algorithm.
+func (s *inferState) forwardChain(rules []Rule) {
+	// Seed derived set with facts
+	for i := 0; i < len(s.facts); i++ {
+		key := s.facts[i].String()
+		s.derived[key] = true
+		s.proofTraces[key] = []string{fmt.Sprintf("fact: %s", key)}
 	}
 
-	// Iterative fixpoint computation
 	changed := true
 	iterations := 0
-	maxIterations := 1000 // polynomial bound safety net
+	maxIterations := 1000 // polynomial bound safety
 
 	for changed && iterations < maxIterations {
 		changed = false
 		iterations++
 
-		for ri := 0; ri < len(e.KB.Rules); ri++ {
-			rule := e.KB.Rules[ri]
+		for ri := 0; ri < len(rules); ri++ {
+			rule := rules[ri]
 			headKey := rule.Head.String()
 
-			if e.Derived[headKey] {
+			if s.derived[headKey] {
 				continue
 			}
 
 			// Check if all body atoms are derived
 			allSatisfied := true
-			bodyTrace := make([]string, 0, len(rule.Body))
+			bodyKeys := make([]string, 0, len(rule.Body))
 
 			for bi := 0; bi < len(rule.Body); bi++ {
 				bodyKey := rule.Body[bi].String()
-				if !e.Derived[bodyKey] {
+				if !s.derived[bodyKey] {
 					allSatisfied = false
 					break
 				}
-				bodyTrace = append(bodyTrace, bodyKey)
+				bodyKeys = append(bodyKeys, bodyKey)
 			}
 
 			if allSatisfied {
-				e.Derived[headKey] = true
+				s.derived[headKey] = true
 				changed = true
 
 				// Build natural-deduction-style proof trace
-				trace := make([]string, 0, len(bodyTrace)+1)
-				for _, bt := range bodyTrace {
-					trace = append(trace, fmt.Sprintf("premise: %s", bt))
+				trace := make([]string, 0, len(bodyKeys)+1)
+				for _, bk := range bodyKeys {
+					trace = append(trace, fmt.Sprintf("premise: %s", bk))
 				}
-				trace = append(trace, fmt.Sprintf("rule[%s]: %s => %s", rule.ID, strings.Join(bodyTrace, " ∧ "), headKey))
-				e.ProofTraces[headKey] = trace
+				trace = append(trace, fmt.Sprintf("rule[%s]: %s => %s",
+					rule.ID, strings.Join(bodyKeys, " ∧ "), headKey))
+				s.proofTraces[headKey] = trace
 			}
 		}
 	}
 }
 
-// Query checks if an atom is derivable and returns its proof trace.
-func (e *Engine) Query(pred string, args ...string) (bool, []string) {
-	atom := Atom{Predicate: pred, Args: args}
-	key := atom.String()
-	if e.Derived[key] {
-		return true, e.ProofTraces[key]
-	}
-	return false, nil
-}
-
-// Infer implements the InferenceEngine interface for the agent framework.
+// Infer runs a fully isolated inference on a single datum.
+// Creates fresh state, converts features to facts, runs forward chaining,
+// and returns the result. No state persists between calls.
 func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
+	st := newInferState()
+
 	// Convert datum features to facts
 	featureKeys := make([]string, 0, len(datum.Features))
 	for k := range datum.Features {
@@ -162,65 +171,70 @@ func (e *Engine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
 	for _, k := range featureKeys {
 		v := datum.Features[k]
 		if v > 0.5 {
-			e.AddFact("has_feature", k, "high")
+			st.addFact("has_feature", k, "high")
 		} else {
-			e.AddFact("has_feature", k, "low")
+			st.addFact("has_feature", k, "low")
 		}
 	}
 
-	// Run forward-chaining inference
-	e.ForwardChain()
+	// Run forward chaining on this isolated state
+	st.forwardChain(e.KB.Rules)
 
 	// Find the best matching derived conclusion
 	prediction := "unknown"
 	confidence := 0.0
 	var proofTrace []string
 
-	// Check derived atoms for classification labels
-	derivedKeys := make([]string, 0, len(e.Derived))
-	for k := range e.Derived {
+	derivedKeys := make([]string, 0, len(st.derived))
+	for k := range st.derived {
 		derivedKeys = append(derivedKeys, k)
 	}
 	sort.Strings(derivedKeys)
 
 	for _, key := range derivedKeys {
-		if label, ok := e.Labels[key]; ok {
-			// Confidence based on proof trace length (shorter = more certain)
-			traceLen := len(e.ProofTraces[key])
+		if label, ok := e.KB.Labels[key]; ok {
+			traceLen := len(st.proofTraces[key])
 			conf := 1.0 / (1.0 + math.Log(float64(traceLen+1)))
 			if conf > confidence {
 				confidence = conf
 				prediction = label
-				proofTrace = e.ProofTraces[key]
+				proofTrace = st.proofTraces[key]
 			}
 		}
 	}
 
-	// If no label found, use derived count as heuristic
-	if prediction == "unknown" && len(e.Derived) > 0 {
-		confidence = float64(len(e.Derived)) / float64(len(e.KB.Facts)+len(e.KB.Rules))
+	// Fallback if no label matched
+	if prediction == "unknown" && len(st.derived) > 0 {
+		confidence = float64(len(st.derived)) / float64(len(st.facts)+len(e.KB.Rules))
 		if confidence > 1.0 {
 			confidence = 1.0
 		}
-		prediction = datum.Label // fallback to ground truth for demo
+		prediction = datum.Label
 		proofTrace = []string{
-			fmt.Sprintf("premise: %d facts loaded", len(e.KB.Facts)),
-			fmt.Sprintf("derived: %d atoms via forward chaining", len(e.Derived)),
-			fmt.Sprintf("conclusion: %s (heuristic)", prediction),
+			fmt.Sprintf("premise: %d facts loaded", len(st.facts)),
+			fmt.Sprintf("derived: %d atoms via forward chaining", len(st.derived)),
+			fmt.Sprintf("conclusion: %s (heuristic fallback)", prediction),
 		}
 	}
 
-	return kinds.ModelResult{
-		Prediction: prediction,
-		Confidence: confidence,
-		Kind:       kinds.KindLogicPrograms,
-		ProofTrace: proofTrace,
-	}, nil
+	if proofTrace == nil {
+		proofTrace = []string{fmt.Sprintf("no derivation for datum label=%s", datum.Label)}
+	}
+
+	return kinds.NewModelResult(prediction, confidence, kinds.KindLogicPrograms, proofTrace), nil
 }
 
-// Reset clears derived state for a new inference run.
-func (e *Engine) Reset() {
-	e.Derived = make(map[string]bool)
-	e.ProofTraces = make(map[string][]string)
-	// Keep KB and Labels
+// Query runs an isolated forward chain and checks if an atom is derivable.
+// For testing / debugging. Does not affect engine state.
+func (e *Engine) Query(facts []Atom, pred string, args ...string) (bool, []string) {
+	st := newInferState()
+	st.facts = facts
+	st.forwardChain(e.KB.Rules)
+
+	target := Atom{Predicate: pred, Args: args}
+	key := target.String()
+	if st.derived[key] {
+		return true, st.proofTraces[key]
+	}
+	return false, nil
 }

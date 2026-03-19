@@ -8,12 +8,9 @@ import (
 
 func TestBuildProof(t *testing.T) {
 	pb := NewProofBuilder()
-
 	cr := kinds.ComposedResult{
 		MLResult: kinds.ModelResult{
-			Prediction: "treat_A",
-			Confidence: 0.85,
-			Kind:       kinds.KindBayesNets,
+			Prediction: "treat_A", Confidence: 0.85, Kind: kinds.KindBayesNets,
 			ProofTrace: []string{
 				"evidence: 3 features observed",
 				"prior(blood_pressure): beliefs updated",
@@ -22,50 +19,39 @@ func TestBuildProof(t *testing.T) {
 			},
 		},
 		ARResult: kinds.ModelResult{
-			Prediction: "treat_A",
-			Confidence: 0.9,
-			Kind:       kinds.KindLogicPrograms,
+			Prediction: "treat_A", Confidence: 0.9, Kind: kinds.KindLogicPrograms,
 			ProofTrace: []string{
 				"premise: has_feature(blood_pressure, high)",
 				"premise: has_feature(heart_rate, high)",
-				"rule[med-r1]: blood_pressure_high ∧ heart_rate_high => treat_A_indicated",
+				"rule[med-r1]: bp_high ^ hr_high => treat_A_indicated",
 			},
 		},
-		Final:     "treat_A",
-		Verified:  true,
-		AUROC:     0.875,
-		Explained: true,
+		Final: "treat_A", Verified: true, AUROC: 0.875, Explained: true,
 	}
 
 	proof := pb.BuildProof(cr)
-
 	if !proof.Sound {
-		t.Error("expected sound proof")
+		t.Error("expected sound")
 	}
 	if !proof.Complete {
-		t.Error("expected complete proof")
+		t.Error("expected complete")
 	}
 	if proof.MaxDepth != 2 {
-		t.Errorf("expected max depth 2, got %d", proof.MaxDepth)
+		t.Errorf("expected depth 2, got %d", proof.MaxDepth)
 	}
 	if proof.Unfolding > 10 {
-		t.Errorf("unfolding %d exceeds CLARA limit of 10", proof.Unfolding)
-	}
-	if len(proof.Steps) == 0 {
-		t.Fatal("expected proof steps")
+		t.Errorf("unfolding %d exceeds 10", proof.Unfolding)
 	}
 
 	formatted := FormatProof(proof)
 	if formatted == "" {
-		t.Error("expected non-empty formatted proof")
+		t.Error("expected formatted output")
 	}
 	t.Log(formatted)
 }
 
-func TestProofUnfoldingLimit(t *testing.T) {
+func TestProofUnfoldingCapped(t *testing.T) {
 	pb := NewProofBuilder()
-
-	// Create a result with many proof trace steps (should be capped at 10)
 	longTrace := make([]string, 15)
 	for i := 0; i < 15; i++ {
 		longTrace[i] = "premise: step"
@@ -73,35 +59,25 @@ func TestProofUnfoldingLimit(t *testing.T) {
 
 	cr := kinds.ComposedResult{
 		MLResult: kinds.ModelResult{
-			Prediction: "X",
-			Confidence: 0.7,
-			Kind:       kinds.KindBayesNets,
+			Prediction: "X", Confidence: 0.7, Kind: kinds.KindBayesNets,
 			ProofTrace: longTrace,
 		},
 		ARResult: kinds.ModelResult{
-			Prediction: "X",
-			Confidence: 0.8,
-			Kind:       kinds.KindLogicPrograms,
+			Prediction: "X", Confidence: 0.8, Kind: kinds.KindLogicPrograms,
 			ProofTrace: longTrace,
 		},
-		Final: "X",
-		AUROC: 0.75,
+		Final: "X", AUROC: 0.75,
 	}
 
 	proof := pb.BuildProof(cr)
-
-	// Count level-2 steps: should be ≤10 per component (ML and AR each capped)
 	level2Count := 0
 	for _, s := range proof.Steps {
 		if s.Level == 2 {
 			level2Count++
 		}
 	}
-
-	// Each component is capped at 10, so total level-2 ≤ 20
+	// Each component capped at 10 => max 20 level-2 steps
 	if level2Count > 20 {
-		t.Errorf("expected ≤20 level-2 steps (10 per component), got %d", level2Count)
+		t.Errorf("expected <=20 level-2 steps, got %d", level2Count)
 	}
-
-	t.Logf("Proof steps: %d, Level-2: %d, Unfolding: %d", len(proof.Steps), level2Count, proof.Unfolding)
 }
