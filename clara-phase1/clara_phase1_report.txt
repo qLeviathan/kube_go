@@ -1,6 +1,6 @@
 ======================================================================
   CLARA Phase 1 -- Automated Evaluation Report
-  Generated: 2026-03-19T19:52:17Z
+  Generated: 2026-03-19T20:05:17Z
 ======================================================================
 
 -- Executive Summary --
@@ -8,24 +8,84 @@
 CLARA Phase 1 Evaluation Summary
 ==================================================
 
-Dataset: coa-planning-test
-  Items: 6 | Accuracy: 66.67% | Mean AUROC: 0.4364
-  Verified: 83.3% | Explained: 100.0%
-
-Dataset: supply-chain-test
-  Items: 4 | Accuracy: 75.00% | Mean AUROC: 0.4583
+Dataset: medical
+  Items: 10 | Accuracy: 80.00% | Mean AUROC: 0.5014
   Verified: 100.0% | Explained: 100.0%
 
-Dataset: medical-treatment-test
-  Items: 8 | Accuracy: 75.00% | Mean AUROC: 0.4984
+Dataset: supply_chain
+  Items: 6 | Accuracy: 83.33% | Mean AUROC: 0.4583
   Verified: 100.0% | Explained: 100.0%
+
+Dataset: coa
+  Items: 8 | Accuracy: 75.00% | Mean AUROC: 0.4419
+  Verified: 87.5% | Explained: 100.0%
 
 Overall: 14/18 Phase 1 metrics passing
 
 
--- Dataset Report: medical-treatment-test --
+-- Dataset Report: supply_chain --
 
-Dataset: medical-treatment-test (SOA AUROC: 0.6000)
+Dataset: supply_chain (SOA AUROC: 0.6000)
+----------------------------------------
+
+Per-Item Results:
+  [1] Final=maintain_now Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=maintain_now(0.42)
+  [2] Final=no_action Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=no_action(0.42)
+  [3] Final=replace Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=replace(0.42)
+  [4] Final=no_action Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=no_action(0.42)
+  [5] Final=maintain_now Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=maintain_now(0.42)
+  [6] Final=no_action Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=no_action(0.42)
+
+Batch Metrics:
+  Total:     6
+  Correct:   5 (83.33%)
+  Verified:  6 (100.00%)
+  Explained: 6 (100.00%)
+  Mean AUROC: 0.4583
+
+Phase 1 Metric Targets:
+  [PASS] Verifiability: 1.0000 (target: 1.0000) -- 100.0% verified (target: 100%)
+  [PASS] Error Rate <= SOA: 0.1667 (target: 0.4000) -- CLARA error=0.1667 SOA error=0.4000
+  [PASS] Kind Multiplicity: 2.0000 (target: 2.0000) -- Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)
+  [PASS] Polynomial Inferencing: 1.0000 (target: 1.0000) -- Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)
+  [FAIL] Composed AUROC > SOA: 0.4583 (target: 0.6000) -- CLARA AUROC=0.4583 vs SOA=0.6000
+  [PASS] Logical Explainability: 1.0000 (target: 1.0000) -- 100.0% have hierarchical natural-deduction proofs
+
+
+-- Dataset Report: coa --
+
+Dataset: coa (SOA AUROC: 0.6000)
+----------------------------------------
+
+Per-Item Results:
+  [1] Final=defend Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=defend(0.42)
+  [2] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
+  [3] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
+  [4] Final=defend Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=defend(0.42)
+  [5] Final=hold Verified=false AUROC=0.3265 ML=treat_A(0.55) AR=hold(0.23)
+  [6] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
+  [7] Final=defend Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=defend(0.42)
+  [8] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
+
+Batch Metrics:
+  Total:     8
+  Correct:   6 (75.00%)
+  Verified:  7 (87.50%)
+  Explained: 8 (100.00%)
+  Mean AUROC: 0.4419
+
+Phase 1 Metric Targets:
+  [FAIL] Verifiability: 0.8750 (target: 1.0000) -- 87.5% verified (target: 100%)
+  [PASS] Error Rate <= SOA: 0.2500 (target: 0.4000) -- CLARA error=0.2500 SOA error=0.4000
+  [PASS] Kind Multiplicity: 2.0000 (target: 2.0000) -- Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)
+  [PASS] Polynomial Inferencing: 1.0000 (target: 1.0000) -- Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)
+  [FAIL] Composed AUROC > SOA: 0.4419 (target: 0.6000) -- CLARA AUROC=0.4419 vs SOA=0.6000
+  [PASS] Logical Explainability: 1.0000 (target: 1.0000) -- 100.0% have hierarchical natural-deduction proofs
+
+
+-- Dataset Report: medical --
+
+Dataset: medical (SOA AUROC: 0.6000)
 ----------------------------------------
 
 Per-Item Results:
@@ -37,76 +97,22 @@ Per-Item Results:
   [6] Final=no_treat Verified=true AUROC=0.4333 ML=treat_A(0.55) AR=no_treat(0.38)
   [7] Final=treat_A Verified=true AUROC=0.5254 ML=treat_A(0.63) AR=treat_A(0.42)
   [8] Final=treat_B Verified=true AUROC=0.4528 ML=no_treat(0.53) AR=treat_B(0.42)
+  [9] Final=treat_A Verified=true AUROC=0.5095 ML=treat_A(0.60) AR=treat_A(0.42)
+  [10] Final=no_treat Verified=true AUROC=0.5166 ML=no_treat(0.65) AR=no_treat(0.38)
 
 Batch Metrics:
-  Total:     8
-  Correct:   6 (75.00%)
-  Verified:  8 (100.00%)
-  Explained: 8 (100.00%)
-  Mean AUROC: 0.4984
+  Total:     10
+  Correct:   8 (80.00%)
+  Verified:  10 (100.00%)
+  Explained: 10 (100.00%)
+  Mean AUROC: 0.5014
 
 Phase 1 Metric Targets:
   [PASS] Verifiability: 1.0000 (target: 1.0000) -- 100.0% verified (target: 100%)
-  [PASS] Error Rate <= SOA: 0.2500 (target: 0.4000) -- CLARA error=0.2500 SOA error=0.4000
+  [PASS] Error Rate <= SOA: 0.2000 (target: 0.4000) -- CLARA error=0.2000 SOA error=0.4000
   [PASS] Kind Multiplicity: 2.0000 (target: 2.0000) -- Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)
   [PASS] Polynomial Inferencing: 1.0000 (target: 1.0000) -- Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)
-  [FAIL] Composed AUROC > SOA: 0.4984 (target: 0.6000) -- CLARA AUROC=0.4984 vs SOA=0.6000
-  [PASS] Logical Explainability: 1.0000 (target: 1.0000) -- 100.0% have hierarchical natural-deduction proofs
-
-
--- Dataset Report: coa-planning-test --
-
-Dataset: coa-planning-test (SOA AUROC: 0.6000)
-----------------------------------------
-
-Per-Item Results:
-  [1] Final=defend Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=defend(0.42)
-  [2] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
-  [3] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
-  [4] Final=defend Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=defend(0.42)
-  [5] Final=hold Verified=false AUROC=0.3265 ML=treat_A(0.55) AR=hold(0.23)
-  [6] Final=advance Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=advance(0.42)
-
-Batch Metrics:
-  Total:     6
-  Correct:   4 (66.67%)
-  Verified:  5 (83.33%)
-  Explained: 6 (100.00%)
-  Mean AUROC: 0.4364
-
-Phase 1 Metric Targets:
-  [FAIL] Verifiability: 0.8333 (target: 1.0000) -- 83.3% verified (target: 100%)
-  [PASS] Error Rate <= SOA: 0.3333 (target: 0.4000) -- CLARA error=0.3333 SOA error=0.4000
-  [PASS] Kind Multiplicity: 2.0000 (target: 2.0000) -- Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)
-  [PASS] Polynomial Inferencing: 1.0000 (target: 1.0000) -- Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)
-  [FAIL] Composed AUROC > SOA: 0.4364 (target: 0.6000) -- CLARA AUROC=0.4364 vs SOA=0.6000
-  [PASS] Logical Explainability: 1.0000 (target: 1.0000) -- 100.0% have hierarchical natural-deduction proofs
-
-
--- Dataset Report: supply-chain-test --
-
-Dataset: supply-chain-test (SOA AUROC: 0.6000)
-----------------------------------------
-
-Per-Item Results:
-  [1] Final=maintain_now Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=maintain_now(0.42)
-  [2] Final=no_action Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=no_action(0.42)
-  [3] Final=replace Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=replace(0.42)
-  [4] Final=no_action Verified=true AUROC=0.4583 ML=treat_A(0.55) AR=no_action(0.42)
-
-Batch Metrics:
-  Total:     4
-  Correct:   3 (75.00%)
-  Verified:  4 (100.00%)
-  Explained: 4 (100.00%)
-  Mean AUROC: 0.4583
-
-Phase 1 Metric Targets:
-  [PASS] Verifiability: 1.0000 (target: 1.0000) -- 100.0% verified (target: 100%)
-  [PASS] Error Rate <= SOA: 0.2500 (target: 0.4000) -- CLARA error=0.2500 SOA error=0.4000
-  [PASS] Kind Multiplicity: 2.0000 (target: 2.0000) -- Phase 1: >=1 ML (Bayesian Networks) & >=1 AR (Logic Programs)
-  [PASS] Polynomial Inferencing: 1.0000 (target: 1.0000) -- Forward-chaining O(R*F^B) + Belief propagation O(N*S^P)
-  [FAIL] Composed AUROC > SOA: 0.4583 (target: 0.6000) -- CLARA AUROC=0.4583 vs SOA=0.6000
+  [FAIL] Composed AUROC > SOA: 0.5014 (target: 0.6000) -- CLARA AUROC=0.5014 vs SOA=0.6000
   [PASS] Logical Explainability: 1.0000 (target: 1.0000) -- 100.0% have hierarchical natural-deduction proofs
 
 
@@ -129,15 +135,15 @@ Agent Activity Logs
 ========================================
 
 SuperClaude Boss [super-claude-boss]: 6 log entries, 1 directives
-  [SC] received directive: Phase 1 evaluation: run all test datasets, verify, report
-  [SC] === SuperClaude starting evaluation: medical-treatment-test (8 items) ===
+  [SC] received directive: Phase 1 evaluation: strategy=ar_priority, soa=0.60
+  [SC] === SuperClaude starting evaluation: medical (10 items) ===
   [SC] Phase: Domain Analysis
   [SC] PhD phd-bayesian-lp recommends 4 kinds: Bayesian-LP with restraint achieves worst-case polynomial time for inference
   [SC] PhD phd-logic-programs recommends 4 kinds: Bayesian-LP with restraint achieves worst-case polynomial time for inference
-  [SC] === SuperClaude completed: 8 results ===
+  [SC] === SuperClaude completed: 10 results ===
 
 Verifier Agents:
-  verifier-soundness: 8 actions
+  verifier-1: 10 actions
     - verified: treat_A pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: no_treat pass=false issues=1
@@ -146,19 +152,23 @@ Verifier Agents:
     - verified: treat_A pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: no_treat pass=false issues=1
-  verifier-completeness: 8 actions
+    - verified: treat_A pass=false issues=1
+    - verified: no_treat pass=false issues=1
+  verifier-2: 10 actions
     - verified: treat_A pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: no_treat pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: treat_A pass=false issues=1
+    - verified: treat_A pass=false issues=1
+    - verified: no_treat pass=false issues=1
     - verified: treat_A pass=false issues=1
     - verified: no_treat pass=false issues=1
 
 PhD Agents:
-  phd-bayesian-lp [bayesian-lp]: 9 actions
-    - analyzed domain=medical-treatment-test kinds=4
+  phd-bayesian-lp [bayesian-lp]: 11 actions
+    - analyzed domain=medical kinds=4
     - reviewed: acceptable: AUROC=0.5470 verified=false
     - reviewed: below threshold: AUROC=0.4926
     - reviewed: below threshold: AUROC=0.4999
@@ -167,8 +177,10 @@ PhD Agents:
     - reviewed: below threshold: AUROC=0.4833
     - reviewed: acceptable: AUROC=0.5254 verified=false
     - reviewed: below threshold: AUROC=0.4866
-  phd-logic-programs [logic-programs]: 9 actions
-    - analyzed domain=medical-treatment-test kinds=4
+    - reviewed: acceptable: AUROC=0.5095 verified=false
+    - reviewed: acceptable: AUROC=0.5166 verified=false
+  phd-logic-programs [logic-programs]: 11 actions
+    - analyzed domain=medical kinds=4
     - reviewed: acceptable: AUROC=0.5470 verified=false
     - reviewed: below threshold: AUROC=0.4926
     - reviewed: below threshold: AUROC=0.4999
@@ -177,9 +189,11 @@ PhD Agents:
     - reviewed: below threshold: AUROC=0.4833
     - reviewed: acceptable: AUROC=0.5254 verified=false
     - reviewed: below threshold: AUROC=0.4866
+    - reviewed: acceptable: AUROC=0.5095 verified=false
+    - reviewed: acceptable: AUROC=0.5166 verified=false
 
 Model Agents:
-  model-bayesnet [Bayesian Networks]: 8 actions
+  model-bayesnet [Bayesian Networks]: 10 actions
     - inferred: treat_A conf=0.68
     - inferred: treat_A conf=0.54
     - inferred: no_treat conf=0.62
@@ -188,7 +202,9 @@ Model Agents:
     - inferred: treat_A conf=0.55
     - inferred: treat_A conf=0.63
     - inferred: no_treat conf=0.53
-  model-logicprog [Logic Programs]: 8 actions
+    - inferred: treat_A conf=0.60
+    - inferred: no_treat conf=0.65
+  model-logicprog [Logic Programs]: 10 actions
     - inferred: treat_A conf=0.42
     - inferred: treat_B conf=0.42
     - inferred: no_treat conf=0.38
@@ -197,6 +213,8 @@ Model Agents:
     - inferred: no_treat conf=0.38
     - inferred: treat_A conf=0.42
     - inferred: treat_B conf=0.42
+    - inferred: treat_A conf=0.42
+    - inferred: no_treat conf=0.38
 
 
 -- Proof & Explainability --
@@ -262,9 +280,9 @@ Proof and Explainability Summary
     [+] 17. [rule] rule[med-r4]: has_feature(blood_pressure, low) ∧ has_feature(glucose, low) ∧ has_feature(heart_rate, low) => no_treat_indicated
   [+] 18. [rule] COMPOSE: ML and AR agree on "no_treat" => high confidence
 
-Total Proofs: 8
-Sound: 8 (100.0%)
-Complete: 8 (100.0%)
+Total Proofs: 10
+Sound: 10 (100.0%)
+Complete: 10 (100.0%)
 Unfolding expansion <= 10: enforced
 
 

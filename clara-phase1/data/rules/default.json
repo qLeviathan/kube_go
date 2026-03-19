@@ -1,0 +1,282 @@
+{
+  "name": "clara-phase1-default",
+  "domain": "multi-domain",
+  "rules": [
+    {
+      "id": "med-r1",
+      "head": {
+        "predicate": "treat_A_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "blood_pressure",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "heart_rate",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "med-r2",
+      "head": {
+        "predicate": "treat_B_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "glucose",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "blood_pressure",
+            "low"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "med-r3",
+      "head": {
+        "predicate": "treat_C_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "blood_pressure",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "glucose",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "heart_rate",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "med-r4",
+      "head": {
+        "predicate": "no_treat_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "blood_pressure",
+            "low"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "glucose",
+            "low"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "heart_rate",
+            "low"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coa-r1",
+      "head": {
+        "predicate": "defend_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "threat_level",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "supply_available",
+            "low"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coa-r2",
+      "head": {
+        "predicate": "advance_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "threat_level",
+            "low"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "supply_available",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "coa-r3",
+      "head": {
+        "predicate": "retreat_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "supply_available",
+            "low"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "terrain_difficulty",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-r1",
+      "head": {
+        "predicate": "maintain_now_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "equipment_age",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "usage_rate",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-r2",
+      "head": {
+        "predicate": "replace_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "equipment_age",
+            "high"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "failure_history",
+            "high"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "sc-r3",
+      "head": {
+        "predicate": "no_action_indicated"
+      },
+      "body": [
+        {
+          "predicate": "has_feature",
+          "args": [
+            "equipment_age",
+            "low"
+          ]
+        },
+        {
+          "predicate": "has_feature",
+          "args": [
+            "failure_history",
+            "low"
+          ]
+        }
+      ]
+    }
+  ],
+  "labels": [
+    {
+      "atom": "treat_A_indicated",
+      "label": "treat_A"
+    },
+    {
+      "atom": "treat_B_indicated",
+      "label": "treat_B"
+    },
+    {
+      "atom": "treat_C_indicated",
+      "label": "treat_C"
+    },
+    {
+      "atom": "no_treat_indicated",
+      "label": "no_treat"
+    },
+    {
+      "atom": "defend_indicated",
+      "label": "defend"
+    },
+    {
+      "atom": "advance_indicated",
+      "label": "advance"
+    },
+    {
+      "atom": "retreat_indicated",
+      "label": "retreat"
+    },
+    {
+      "atom": "maintain_now_indicated",
+      "label": "maintain_now"
+    },
+    {
+      "atom": "replace_indicated",
+      "label": "replace"
+    },
+    {
+      "atom": "no_action_indicated",
+      "label": "no_action"
+    }
+  ]
+}

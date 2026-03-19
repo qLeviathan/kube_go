@@ -1,0 +1,209 @@
+{
+  "name": "clara-phase1-default",
+  "domain": "multi-domain",
+  "nodes": [
+    {
+      "name": "blood_pressure",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "glucose",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "heart_rate",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "threat_level",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "supply_available",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "terrain_difficulty",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "equipment_age",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "usage_rate",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "failure_history",
+      "states": [
+        "high",
+        "low"
+      ]
+    },
+    {
+      "name": "decision",
+      "states": [
+        "high",
+        "low"
+      ],
+      "parents": [
+        "blood_pressure",
+        "glucose",
+        "heart_rate"
+      ]
+    }
+  ],
+  "cpts": [
+    {
+      "node": "decision",
+      "parent_state": "high",
+      "node_state": "high",
+      "probability": 0.8
+    },
+    {
+      "node": "decision",
+      "parent_state": "high",
+      "node_state": "low",
+      "probability": 0.2
+    },
+    {
+      "node": "decision",
+      "parent_state": "low",
+      "node_state": "high",
+      "probability": 0.3
+    },
+    {
+      "node": "decision",
+      "parent_state": "low",
+      "node_state": "low",
+      "probability": 0.7
+    }
+  ],
+  "priors": [
+    {
+      "node": "blood_pressure",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "blood_pressure",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "glucose",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "glucose",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "heart_rate",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "heart_rate",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "threat_level",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "threat_level",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "supply_available",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "supply_available",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "terrain_difficulty",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "terrain_difficulty",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "equipment_age",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "equipment_age",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "usage_rate",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "usage_rate",
+      "state": "low",
+      "probability": 0.5
+    },
+    {
+      "node": "failure_history",
+      "state": "high",
+      "probability": 0.5
+    },
+    {
+      "node": "failure_history",
+      "state": "low",
+      "probability": 0.5
+    }
+  ],
+  "labels": [
+    {
+      "state": "high",
+      "label": "treat_A"
+    },
+    {
+      "state": "low",
+      "label": "no_treat"
+    }
+  ]
+}

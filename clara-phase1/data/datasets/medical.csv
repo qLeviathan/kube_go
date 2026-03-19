@@ -1,0 +1,11 @@
+blood_pressure,glucose,heart_rate,label
+0.85,0.75,0.65,treat_A
+0.25,0.85,0.35,treat_B
+0.15,0.15,0.20,no_treat
+0.90,0.90,0.85,treat_C
+0.55,0.45,0.60,treat_A
+0.50,0.50,0.50,treat_B
+0.99,0.01,0.99,treat_A
+0.01,0.99,0.01,treat_B
+0.70,0.30,0.80,treat_A
+0.10,0.10,0.10,no_treat
