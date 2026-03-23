@@ -51,6 +51,30 @@ type Config struct {
 	Verbose      bool   `json:"verbose"`
 	SaveInferences bool `json:"save_inferences"`
 	InferencesFile string `json:"inferences_file"`
+
+	// Memory (Phase 2)
+	MemoryFile string `json:"memory_file"`
+
+	// Rewriter (Phase 2)
+	EnableRewriter   bool `json:"enable_rewriter"`
+	RewriterMinFires int  `json:"rewriter_min_fires"`
+
+	// Futures (Phase 2)
+	EnableFutures    bool `json:"enable_futures"`
+	FutureCacheSize  int  `json:"future_cache_size"`
+	FutureChainDepth int  `json:"future_chain_depth"`
+
+	// Swarm (Phase 2)
+	SwarmEnabled       bool `json:"swarm_enabled"`
+	MinVerifiers       int  `json:"min_verifiers"`
+	MaxVerifiers       int  `json:"max_verifiers"`
+	MinPhDs            int  `json:"min_phds"`
+	MaxPhDs            int  `json:"max_phds"`
+	MinModels          int  `json:"min_models"`
+	MaxModels          int  `json:"max_models"`
+	ScaleUpThreshold   int  `json:"scale_up_threshold"`
+	ScaleDownIdleSec   int  `json:"scale_down_idle_sec"`
+	MaxSwarmSize       int  `json:"max_swarm_size"`
 }
 
 // DefaultConfig returns a reasonable default configuration.
@@ -80,6 +104,24 @@ func DefaultConfig() Config {
 		Verbose:            true,
 		SaveInferences:     false,
 		InferencesFile:     "inferences.json",
+
+		// Phase 2 defaults
+		MemoryFile:         "data/memory.json",
+		EnableRewriter:     true,
+		RewriterMinFires:   5,
+		EnableFutures:      true,
+		FutureCacheSize:    1000,
+		FutureChainDepth:   5,
+		SwarmEnabled:       true,
+		MinVerifiers:       1,
+		MaxVerifiers:       6,
+		MinPhDs:            1,
+		MaxPhDs:            4,
+		MinModels:          2,
+		MaxModels:          8,
+		ScaleUpThreshold:   5,
+		ScaleDownIdleSec:   30,
+		MaxSwarmSize:       20,
 	}
 }
 
@@ -185,6 +227,30 @@ func BuildInteractive(p *cli.Prompter) Config {
 	cfg.SaveInferences = p.AskYesNo("save_inferences", "Save all inference results to file?", cfg.SaveInferences)
 	if cfg.SaveInferences {
 		cfg.InferencesFile = p.AskString("inferences_file", "Inferences output file", cfg.InferencesFile)
+	}
+
+	// === Memory (Phase 2) ===
+	p.Section("Perpetual Memory")
+	cfg.MemoryFile = p.AskString("memory_file", "Memory store file (JSON)", cfg.MemoryFile)
+
+	// === Rewriter (Phase 2) ===
+	p.Section("Recursive Rule Rewriter")
+	cfg.EnableRewriter = p.AskYesNo("enable_rewriter", "Enable recursive rule rewriting?", cfg.EnableRewriter)
+	if cfg.EnableRewriter {
+		cfg.RewriterMinFires = p.AskInt("rewriter_min_fires",
+			"Minimum rule fires before evaluating", cfg.RewriterMinFires)
+	}
+
+	// === Swarm & Futures (Phase 2) ===
+	p.Section("Swarm & Future Chaining")
+	cfg.SwarmEnabled = p.AskYesNo("swarm_enabled", "Enable autoscaled swarm?", cfg.SwarmEnabled)
+	if cfg.SwarmEnabled {
+		cfg.MaxSwarmSize = p.AskInt("max_swarm_size", "Maximum swarm size", cfg.MaxSwarmSize)
+	}
+	cfg.EnableFutures = p.AskYesNo("enable_futures", "Enable future chain prediction?", cfg.EnableFutures)
+	if cfg.EnableFutures {
+		cfg.FutureChainDepth = p.AskInt("future_chain_depth",
+			"Future chain prediction depth", cfg.FutureChainDepth)
 	}
 
 	// === Save config ===

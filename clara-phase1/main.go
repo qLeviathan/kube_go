@@ -1,8 +1,6 @@
-// CLARA Phase 1 -- Compositional Learning-And-Reasoning for AI
-// DARPA-PA-25-07-02 Disruption Opportunity
-//
-// Dynamic CLI-driven system. All configuration via interactive questionnaire,
-// JSON config files, or CLI flags. No hardcoded parameters.
+// CLARA Phase 2 -- Compositional Learning-And-Reasoning for AI
+// Autonomous Intelligence Platform with Recursive Rule Rewriting,
+// Future Chaining, and Autoscaled Swarm Coordination.
 //
 // Usage:
 //   go run main.go                    # Interactive mode (questionnaire)
@@ -27,8 +25,8 @@ import (
 
 func main() {
 	fmt.Println("================================================================")
-	fmt.Println("  CLARA Phase 1 -- AR+ML Composed Inference System")
-	fmt.Println("  DARPA-PA-25-07-02 Disruption Opportunity")
+	fmt.Println("  CLARA Phase 2 -- Autonomous Intelligence Platform")
+	fmt.Println("  Recursive Rule Rewriting | Future Chaining | Swarm")
 	fmt.Println("  Boss: SuperClaude Agent | Dynamic Configuration")
 	fmt.Println("================================================================")
 	fmt.Println()
@@ -61,6 +59,43 @@ func main() {
 	fmt.Printf("  Boss log:  %d entries\n", len(result.SuperClaude.Log))
 	fmt.Printf("  Datasets:  %d\n", len(result.DatasetReports))
 	fmt.Printf("  Results:   %d\n", len(result.OrchestratorResults))
+
+	// Phase 2: Memory summary
+	if result.Memory != nil {
+		fmt.Printf("\nPerpetual Memory:\n")
+		fmt.Printf("  %s\n", result.Memory.Summary())
+		fmt.Printf("  Total runs: %d\n", result.Memory.TotalRuns())
+	}
+
+	// Phase 2: Rewriter summary
+	if result.RewriteReport != nil {
+		rr := result.RewriteReport
+		fmt.Printf("\nRecursive Rule Rewriter:\n")
+		fmt.Printf("  Evaluated:    %d rules\n", rr.Evaluated)
+		fmt.Printf("  Strengthened: %d\n", rr.Strengthened)
+		fmt.Printf("  Weakened:     %d\n", rr.Weakened)
+		fmt.Printf("  Retired:      %d\n", rr.Retired)
+		fmt.Printf("  Proposed:     %d\n", rr.Proposed)
+		fmt.Printf("  Split:        %d\n", rr.Split)
+	}
+
+	// Phase 2: Swarm summary
+	if result.Swarm != nil {
+		status := result.Swarm.Status()
+		fmt.Printf("\nSwarm Status:\n")
+		fmt.Printf("  Total agents:    %d\n", status.TotalAgents)
+		fmt.Printf("  Peak agents:     %d\n", status.PeakAgents)
+		fmt.Printf("  Tasks completed: %d\n", status.CompletedTasks)
+		for role, count := range status.AgentsByRole {
+			fmt.Printf("  %-16s %d\n", role+":", count)
+		}
+	}
+
+	// Phase 2: Future predictor summary
+	if result.FuturePredictor != nil {
+		fmt.Printf("\nFuture Chain Predictor:\n")
+		fmt.Printf("  %s\n", result.FuturePredictor.Summary())
+	}
 }
 
 func resolveConfig() config.Config {
