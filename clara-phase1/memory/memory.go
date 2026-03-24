@@ -1,4 +1,4 @@
-// Package memory implements a persistent learning store for CLARA.
+// Package memory implements a persistent learning store for CARLA.
 // Facts, rule performance, inference patterns, and run history survive across runs.
 // All data is JSON-backed and loaded/saved to a single file.
 // Agents query memory during inference to leverage past experience.
@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-// Store is the persistent memory for the CLARA system.
+// Store is the persistent memory for the CARLA system.
 // It tracks learned facts, rule performance, inference patterns, and run history.
 // Thread-safe for concurrent agent access.
 type Store struct {

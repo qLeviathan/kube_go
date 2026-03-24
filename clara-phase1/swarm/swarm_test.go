@@ -298,7 +298,6 @@ func TestControllerRunDataset(t *testing.T) {
 	engine := &dummyEngine{name: "dummy"}
 	ctrl.SpawnVerifier("verifier-1")
 	ctrl.SpawnPhD("phd-1", "general")
-	ctrl.SpawnModel("model-ml", kinds.KindBayesNets, engine)
 	ctrl.SpawnModel("model-ar", kinds.KindLogicPrograms, engine)
 
 	dataset := kinds.DataSet{
@@ -348,7 +347,7 @@ type dummyEngine struct {
 }
 
 func (d *dummyEngine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
-	return kinds.NewModelResult("predicted", 0.8, kinds.KindBayesNets, []string{"test proof"}), nil
+	return kinds.NewModelResult("predicted", 0.8, kinds.KindLogicPrograms, []string{"test proof"}), nil
 }
 
 func (d *dummyEngine) Name() string {

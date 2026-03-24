@@ -1,4 +1,4 @@
-// Package dataagents implements autonomous data filing agents for CLARA Phase 1.
+// Package dataagents implements autonomous data filing agents for CARLA.
 // Agents: Discovery, Loader, Validator, Quality, Registry.
 // No recursion. All agents operate iteratively.
 package dataagents

@@ -207,8 +207,8 @@ func (c *Controller) RunDataset(dataset kinds.DataSet, strategy string) []agents
 	for _, or := range results {
 		c.Memory.RecordPattern(
 			featureKeys(or.Datum),
-			or.ComposedResult.Final,
-			or.ComposedResult.AUROC,
+			or.InferenceResult.Final,
+			or.InferenceResult.Confidence,
 		)
 	}
 

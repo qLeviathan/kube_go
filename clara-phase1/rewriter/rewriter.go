@@ -1,4 +1,4 @@
-// Package rewriter implements recursive rule-checking and rewriting for CLARA.
+// Package rewriter implements recursive rule-checking and rewriting for CARLA.
 // Meta-rules evaluate rule effectiveness and propose improvements.
 // Rules evolve across runs: underperformers get retired, high performers
 // get strengthened, and new rules get proposed from observed patterns.

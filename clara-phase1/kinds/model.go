@@ -16,7 +16,7 @@ type DataSet struct {
 	Split string // "train", "test", "val"
 }
 
-// ModelResult holds the output from a single ML or AR inference.
+// ModelResult holds the output from a single AR inference.
 type ModelResult struct {
 	Prediction string
 	Confidence float64
@@ -37,25 +37,24 @@ func NewModelResult(prediction string, confidence float64, kind Kind, trace []st
 	}
 }
 
-// ComposedResult holds the combined ML+AR output.
-type ComposedResult struct {
-	MLResult  ModelResult
-	ARResult  ModelResult
+// InferenceResult holds the output of the rules engine pipeline.
+// Replaces the old ComposedResult (which merged ML+AR).
+type InferenceResult struct {
+	Result    ModelResult
 	Final     string
 	Verified  bool
-	AUROC     float64
+	Confidence float64
 	Explained bool
 }
 
 // Summary returns a one-line summary string.
-func (cr ComposedResult) Summary() string {
-	return fmt.Sprintf("Final=%s Verified=%v AUROC=%.4f ML=%s(%.2f) AR=%s(%.2f)",
-		cr.Final, cr.Verified, cr.AUROC,
-		cr.MLResult.Prediction, cr.MLResult.Confidence,
-		cr.ARResult.Prediction, cr.ARResult.Confidence)
+func (ir InferenceResult) Summary() string {
+	return fmt.Sprintf("Final=%s Verified=%v Confidence=%.4f AR=%s(%.2f)",
+		ir.Final, ir.Verified, ir.Confidence,
+		ir.Result.Prediction, ir.Result.Confidence)
 }
 
-// Metric captures a named Phase 1 metric evaluation.
+// Metric captures a named evaluation metric.
 type Metric struct {
 	Name   string
 	Value  float64

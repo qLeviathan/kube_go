@@ -1,4 +1,4 @@
-// Package config defines the dynamic configuration for CLARA Phase 1.
+// Package config defines the dynamic configuration for CARLA.
 // All pipeline parameters are configurable — nothing is hardcoded.
 // Config can be built interactively via CLI questionnaire, loaded from
 // JSON file, or constructed programmatically for tests.
@@ -12,116 +12,104 @@ import (
 	"github.com/clara-phase1/cli"
 )
 
-// Config holds all dynamic parameters for a CLARA Phase 1 run.
+// Config holds all dynamic parameters for a CARLA run.
 type Config struct {
 	// Data
-	DataDir        string   `json:"data_dir"`
-	DatasetFiles   []string `json:"dataset_files"`   // CSV filenames to load
-	FeatureThreshold float64 `json:"feature_threshold"` // discretization cutoff
+	DataDir          string   `json:"data_dir"`
+	DatasetFiles     []string `json:"dataset_files"`
+	FeatureThreshold float64  `json:"feature_threshold"`
 
-	// Kinds
-	MLKinds []string `json:"ml_kinds"` // e.g. ["bayes-nets", "decision-tree"]
+	// AR Kinds
 	ARKinds []string `json:"ar_kinds"` // e.g. ["logic-programs", "bayesian-lp"]
 
-	// Rules & Models
-	RulesFile    string `json:"rules_file"`    // JSON file with AR rules
-	BayesNetFile string `json:"bayesnet_file"` // JSON file with BayesNet structure
+	// Rules
+	RulesFile string `json:"rules_file"` // JSON file with AR rules
 
-	// Composition
-	Strategy          string  `json:"strategy"` // "ar_priority", "weighted_fusion", "consensus"
-	ARWeight          float64 `json:"ar_weight"`
-	MLWeight          float64 `json:"ml_weight"`
+	// Inference Strategy
+	Strategy            string  `json:"strategy"` // "ar_priority", "confidence_rank", "consensus"
 	ConfidenceThreshold float64 `json:"confidence_threshold"`
 
 	// Agents
-	NumVerifiers int      `json:"num_verifiers"`
-	NumPhDs      int      `json:"num_phds"`
+	NumVerifiers   int      `json:"num_verifiers"`
+	NumPhDs        int      `json:"num_phds"`
 	PhDSpecialties []string `json:"phd_specialties"`
 
-	// Metrics
-	SOAAUROC       float64 `json:"soa_auroc"`
-	VerifyTarget   float64 `json:"verify_target"`
-	ExplainTarget  float64 `json:"explain_target"`
-	ErrorTolerance float64 `json:"error_tolerance"`
-	MaxProofDepth  int     `json:"max_proof_depth"`
+	// Evaluation
+	VerifyTarget  float64 `json:"verify_target"`
+	ExplainTarget float64 `json:"explain_target"`
+	MaxProofDepth int     `json:"max_proof_depth"`
 
 	// Output
-	OutputFile   string `json:"output_file"`
-	OutputFormat string `json:"output_format"` // "text", "json"
-	Verbose      bool   `json:"verbose"`
-	SaveInferences bool `json:"save_inferences"`
+	OutputFile     string `json:"output_file"`
+	OutputFormat   string `json:"output_format"` // "text", "json"
+	Verbose        bool   `json:"verbose"`
+	SaveInferences bool   `json:"save_inferences"`
 	InferencesFile string `json:"inferences_file"`
 
-	// Memory (Phase 2)
+	// Memory
 	MemoryFile string `json:"memory_file"`
 
-	// Rewriter (Phase 2)
+	// Rewriter
 	EnableRewriter   bool `json:"enable_rewriter"`
 	RewriterMinFires int  `json:"rewriter_min_fires"`
 
-	// Futures (Phase 2)
+	// Futures
 	EnableFutures    bool `json:"enable_futures"`
 	FutureCacheSize  int  `json:"future_cache_size"`
 	FutureChainDepth int  `json:"future_chain_depth"`
 
-	// Swarm (Phase 2)
-	SwarmEnabled       bool `json:"swarm_enabled"`
-	MinVerifiers       int  `json:"min_verifiers"`
-	MaxVerifiers       int  `json:"max_verifiers"`
-	MinPhDs            int  `json:"min_phds"`
-	MaxPhDs            int  `json:"max_phds"`
-	MinModels          int  `json:"min_models"`
-	MaxModels          int  `json:"max_models"`
-	ScaleUpThreshold   int  `json:"scale_up_threshold"`
-	ScaleDownIdleSec   int  `json:"scale_down_idle_sec"`
-	MaxSwarmSize       int  `json:"max_swarm_size"`
+	// Swarm
+	SwarmEnabled     bool `json:"swarm_enabled"`
+	MinVerifiers     int  `json:"min_verifiers"`
+	MaxVerifiers     int  `json:"max_verifiers"`
+	MinPhDs          int  `json:"min_phds"`
+	MaxPhDs          int  `json:"max_phds"`
+	MinModels        int  `json:"min_models"`
+	MaxModels        int  `json:"max_models"`
+	ScaleUpThreshold int  `json:"scale_up_threshold"`
+	ScaleDownIdleSec int  `json:"scale_down_idle_sec"`
+	MaxSwarmSize     int  `json:"max_swarm_size"`
 }
 
 // DefaultConfig returns a reasonable default configuration.
 func DefaultConfig() Config {
 	return Config{
-		DataDir:            "data/datasets",
-		DatasetFiles:       []string{},
-		FeatureThreshold:   0.5,
-		MLKinds:            []string{"bayes-nets"},
-		ARKinds:            []string{"logic-programs"},
-		RulesFile:          "data/rules/default.json",
-		BayesNetFile:       "data/models/default.json",
-		Strategy:           "ar_priority",
-		ARWeight:           0.7,
-		MLWeight:           0.3,
+		DataDir:             "data/datasets",
+		DatasetFiles:        []string{},
+		FeatureThreshold:    0.5,
+		ARKinds:             []string{"logic-programs"},
+		RulesFile:           "data/rules/default.json",
+		Strategy:            "ar_priority",
 		ConfidenceThreshold: 0.3,
-		NumVerifiers:       2,
-		NumPhDs:            2,
-		PhDSpecialties:     []string{"bayesian-lp", "logic-programs"},
-		SOAAUROC:           0.60,
-		VerifyTarget:       0.95,
-		ExplainTarget:      0.90,
-		ErrorTolerance:     0.05,
-		MaxProofDepth:      10,
-		OutputFile:         "clara_phase1_report.txt",
-		OutputFormat:       "text",
-		Verbose:            true,
-		SaveInferences:     false,
-		InferencesFile:     "inferences.json",
+		NumVerifiers:        2,
+		NumPhDs:             2,
+		PhDSpecialties:      []string{"logic-programs", "bayesian-lp"},
+		VerifyTarget:        0.95,
+		ExplainTarget:       0.90,
+		MaxProofDepth:       10,
+		OutputFile:          "carla_report.txt",
+		OutputFormat:        "text",
+		Verbose:             true,
+		SaveInferences:      false,
+		InferencesFile:      "inferences.json",
 
-		// Phase 2 defaults
-		MemoryFile:         "data/memory.json",
-		EnableRewriter:     true,
-		RewriterMinFires:   5,
-		EnableFutures:      true,
-		FutureCacheSize:    1000,
-		FutureChainDepth:   5,
-		SwarmEnabled:       true,
-		MinVerifiers:       1,
-		MaxVerifiers:       6,
-		MinPhDs:            1,
-		MaxPhDs:            4,
-		MinModels:          2,
-		MaxModels:          8,
-		ScaleUpThreshold:   5,
-		ScaleDownIdleSec:   30,
-		MaxSwarmSize:       20,
+		// Memory
+		MemoryFile:       "data/memory.json",
+		EnableRewriter:   true,
+		RewriterMinFires: 5,
+		EnableFutures:    true,
+		FutureCacheSize:  1000,
+		FutureChainDepth: 5,
+		SwarmEnabled:     true,
+		MinVerifiers:     1,
+		MaxVerifiers:     6,
+		MinPhDs:          1,
+		MaxPhDs:          4,
+		MinModels:        1,
+		MaxModels:        4,
+		ScaleUpThreshold: 5,
+		ScaleDownIdleSec: 30,
+		MaxSwarmSize:     20,
 	}
 }
 
@@ -151,7 +139,7 @@ func (c Config) SaveToFile(path string) error {
 func BuildInteractive(p *cli.Prompter) Config {
 	cfg := DefaultConfig()
 
-	p.Section("CLARA Phase 1 Configuration")
+	p.Section("CARLA Configuration")
 
 	// === Data ===
 	p.Section("Data Sources")
@@ -166,38 +154,26 @@ func BuildInteractive(p *cli.Prompter) Config {
 	}
 
 	// === Kind Selection ===
-	p.Section("AI Kind Selection (Phase 1: >=1 ML + >=1 AR)")
-
-	mlChoices := []string{"bayes-nets", "decision-tree", "bayesian"}
-	cfg.MLKinds = p.AskMultiChoice("ml_kinds",
-		"Select ML kinds to compose:", mlChoices, []int{0})
-	if len(cfg.MLKinds) == 0 {
-		p.Info("Phase 1 requires >=1 ML kind. Defaulting to bayes-nets.")
-		cfg.MLKinds = []string{"bayes-nets"}
-	}
+	p.Section("AR Kind Selection")
 
 	arChoices := []string{"logic-programs", "bayesian-lp", "propositional-classical"}
 	cfg.ARKinds = p.AskMultiChoice("ar_kinds",
-		"Select AR kinds to compose:", arChoices, []int{0})
+		"Select AR kinds:", arChoices, []int{0})
 	if len(cfg.ARKinds) == 0 {
-		p.Info("Phase 1 requires >=1 AR kind. Defaulting to logic-programs.")
+		p.Info("Defaulting to logic-programs.")
 		cfg.ARKinds = []string{"logic-programs"}
 	}
 
-	// === Rules & Models ===
-	p.Section("Rules & Model Configuration")
+	// === Rules ===
+	p.Section("Rules Configuration")
 	cfg.RulesFile = p.AskString("rules_file",
 		"AR rules file (JSON)", cfg.RulesFile)
-	cfg.BayesNetFile = p.AskString("bayesnet_file",
-		"BayesNet structure file (JSON)", cfg.BayesNetFile)
 
-	// === Composition ===
-	p.Section("Composition Strategy")
+	// === Strategy ===
+	p.Section("Inference Strategy")
 	cfg.Strategy = p.AskChoice("strategy",
-		"How should ML and AR results be composed?",
-		[]string{"ar_priority", "weighted_fusion", "consensus"}, 0)
-	cfg.ARWeight = p.AskFloat("ar_weight", "AR weight in composition", cfg.ARWeight)
-	cfg.MLWeight = p.AskFloat("ml_weight", "ML weight in composition", cfg.MLWeight)
+		"How should inference results be resolved?",
+		[]string{"ar_priority", "confidence_rank", "consensus"}, 0)
 	cfg.ConfidenceThreshold = p.AskFloat("confidence_threshold",
 		"Minimum confidence for verification", cfg.ConfidenceThreshold)
 
@@ -206,17 +182,15 @@ func BuildInteractive(p *cli.Prompter) Config {
 	cfg.NumVerifiers = p.AskInt("num_verifiers", "Number of Verifier agents", cfg.NumVerifiers)
 	cfg.NumPhDs = p.AskInt("num_phds", "Number of PhD agents", cfg.NumPhDs)
 
-	specChoices := []string{"bayesian-lp", "logic-programs", "neural-symbolic", "constraint-programming"}
+	specChoices := []string{"logic-programs", "bayesian-lp", "constraint-programming"}
 	cfg.PhDSpecialties = p.AskMultiChoice("phd_specialties",
 		"PhD agent specialties:", specChoices, []int{0, 1})
 
-	// === Metrics ===
-	p.Section("Phase 1 Metric Targets (per DARPA-PA-25-07-02)")
-	cfg.SOAAUROC = p.AskFloat("soa_auroc", "State-of-the-art AUROC baseline", cfg.SOAAUROC)
+	// === Evaluation ===
+	p.Section("Evaluation Targets")
 	cfg.VerifyTarget = p.AskFloat("verify_target", "Verifiability target (0.0-1.0)", cfg.VerifyTarget)
 	cfg.ExplainTarget = p.AskFloat("explain_target", "Explainability target (0.0-1.0)", cfg.ExplainTarget)
-	cfg.ErrorTolerance = p.AskFloat("error_tolerance", "Error rate tolerance above SOA", cfg.ErrorTolerance)
-	cfg.MaxProofDepth = p.AskInt("max_proof_depth", "Max proof unfolding depth (DARPA: <=10)", cfg.MaxProofDepth)
+	cfg.MaxProofDepth = p.AskInt("max_proof_depth", "Max proof unfolding depth (<=10)", cfg.MaxProofDepth)
 
 	// === Output ===
 	p.Section("Output Configuration")
@@ -229,11 +203,11 @@ func BuildInteractive(p *cli.Prompter) Config {
 		cfg.InferencesFile = p.AskString("inferences_file", "Inferences output file", cfg.InferencesFile)
 	}
 
-	// === Memory (Phase 2) ===
+	// === Memory ===
 	p.Section("Perpetual Memory")
 	cfg.MemoryFile = p.AskString("memory_file", "Memory store file (JSON)", cfg.MemoryFile)
 
-	// === Rewriter (Phase 2) ===
+	// === Rewriter ===
 	p.Section("Recursive Rule Rewriter")
 	cfg.EnableRewriter = p.AskYesNo("enable_rewriter", "Enable recursive rule rewriting?", cfg.EnableRewriter)
 	if cfg.EnableRewriter {
@@ -241,7 +215,7 @@ func BuildInteractive(p *cli.Prompter) Config {
 			"Minimum rule fires before evaluating", cfg.RewriterMinFires)
 	}
 
-	// === Swarm & Futures (Phase 2) ===
+	// === Swarm & Futures ===
 	p.Section("Swarm & Future Chaining")
 	cfg.SwarmEnabled = p.AskYesNo("swarm_enabled", "Enable autoscaled swarm?", cfg.SwarmEnabled)
 	if cfg.SwarmEnabled {
@@ -256,7 +230,7 @@ func BuildInteractive(p *cli.Prompter) Config {
 	// === Save config ===
 	saveConfig := p.AskYesNo("save_config", "Save this configuration for reuse?", false)
 	if saveConfig {
-		configPath := p.AskString("config_path", "Config file path", "clara_config.json")
+		configPath := p.AskString("config_path", "Config file path", "carla_config.json")
 		if err := cfg.SaveToFile(configPath); err != nil {
 			p.Info("Warning: could not save config: %v", err)
 		} else {

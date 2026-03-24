@@ -1,4 +1,4 @@
-// Package ar implements the Automated Reasoning engine for CLARA Phase 1.
+// Package ar implements the Automated Reasoning engine for CARLA.
 // Uses Logic Programs (LP) with iterative forward-chaining inference.
 // No recursion. Each call to Infer is fully isolated — state is scoped per call.
 package ar

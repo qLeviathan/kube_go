@@ -30,9 +30,8 @@ func TestSuperClaudeDirective(t *testing.T) {
 func TestSuperClaudeFullRun(t *testing.T) {
 	boss := NewSuperClaudeAgent("boss")
 	boss.AddVerifier(NewVerifierAgent("v1"))
-	boss.AddPhD(NewPhDAgent("phd1", "bayesian-lp"))
-	boss.AddModel(NewModelAgent("ml1", kinds.KindBayesNets, &dummyEngine{cat: kinds.CategoryML}))
-	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &dummyEngine{cat: kinds.CategoryAR}))
+	boss.AddPhD(NewPhDAgent("phd1", "logic-programs"))
+	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &dummyEngine{}))
 
 	dataset := kinds.DataSet{
 		Name: "test", Split: "test",
@@ -57,7 +56,7 @@ func TestSuperClaudeFullRun(t *testing.T) {
 		t.Fatalf("expected 2 results, got %d", len(results))
 	}
 	for i, r := range results {
-		if r.ComposedResult.Final == "" {
+		if r.InferenceResult.Final == "" {
 			t.Errorf("result %d: empty final prediction", i)
 		}
 	}
@@ -77,20 +76,16 @@ func TestSuperClaudeRole(t *testing.T) {
 
 func TestVerifierAgent(t *testing.T) {
 	v := NewVerifierAgent("v1")
-	cr := kinds.ComposedResult{
-		MLResult: kinds.ModelResult{
-			Prediction: "A", Confidence: 0.8,
-			ProofTrace: []string{"premise: x", "rule: x => A"},
-		},
-		ARResult: kinds.ModelResult{
+	ir := kinds.InferenceResult{
+		Result: kinds.ModelResult{
 			Prediction: "A", Confidence: 0.9,
 			ProofTrace: []string{"fact: y", "rule[r1]: y => A"},
 		},
-		Final: "A", Verified: false, AUROC: 0.85, Explained: true,
+		Final: "A", Verified: false, Confidence: 0.9, Explained: true,
 	}
 
 	msg := Message{From: "test", To: v.ID(), Type: "verify",
-		Payload: cr, Timestamp: time.Now()}
+		Payload: ir, Timestamp: time.Now()}
 	resp, err := v.Process(msg)
 	if err != nil {
 		t.Fatalf("error: %v", err)
@@ -107,24 +102,23 @@ func TestVerifierAgent(t *testing.T) {
 
 func TestVerifierRejectsEmptyTrace(t *testing.T) {
 	v := NewVerifierAgent("v1")
-	cr := kinds.ComposedResult{
-		MLResult: kinds.ModelResult{Prediction: "A", Confidence: 0.8, ProofTrace: []string{}},
-		ARResult: kinds.ModelResult{Prediction: "A", Confidence: 0.9, ProofTrace: []string{"ok"}},
-		Final: "A",
+	ir := kinds.InferenceResult{
+		Result: kinds.ModelResult{Prediction: "A", Confidence: 0.8, ProofTrace: []string{}},
+		Final:  "A",
 	}
 	msg := Message{From: "test", To: v.ID(), Type: "verify",
-		Payload: cr, Timestamp: time.Now()}
+		Payload: ir, Timestamp: time.Now()}
 	resp, _ := v.Process(msg)
 	vr := resp.Payload.(VerificationResult)
 	if vr.Pass {
-		t.Error("should fail: ML has empty proof trace")
+		t.Error("should fail: empty proof trace")
 	}
 }
 
 // --- PhD Tests ---
 
 func TestPhDAgent(t *testing.T) {
-	p := NewPhDAgent("phd1", "bayesian-lp")
+	p := NewPhDAgent("phd1", "logic-programs")
 
 	msg := Message{From: "test", To: p.ID(), Type: "request",
 		Payload:   DomainRequest{Domain: "medical", Constraints: []string{"verifiable"}},
@@ -145,7 +139,7 @@ func TestPhDAgent(t *testing.T) {
 // --- Model Tests ---
 
 func TestModelAgent(t *testing.T) {
-	m := NewModelAgent("m1", kinds.KindBayesNets, &dummyEngine{cat: kinds.CategoryML})
+	m := NewModelAgent("m1", kinds.KindLogicPrograms, &dummyEngine{})
 	datum := kinds.Datum{Features: map[string]float64{"x": 0.7}, Label: "A"}
 
 	msg := Message{From: "test", To: m.ID(), Type: "request",
@@ -166,8 +160,7 @@ func TestBossDatumIsolation(t *testing.T) {
 	boss := NewSuperClaudeAgent("boss")
 	boss.AddVerifier(NewVerifierAgent("v1"))
 	boss.AddPhD(NewPhDAgent("phd1", "test"))
-	boss.AddModel(NewModelAgent("ml1", kinds.KindBayesNets, &isolationEngine{cat: kinds.CategoryML}))
-	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &isolationEngine{cat: kinds.CategoryAR}))
+	boss.AddModel(NewModelAgent("ar1", kinds.KindLogicPrograms, &isolationEngine{}))
 
 	dataset := kinds.DataSet{
 		Name: "isolation-test", Split: "test",
@@ -184,46 +177,37 @@ func TestBossDatumIsolation(t *testing.T) {
 	results := resp.Payload.([]OrchestratorResult)
 
 	// Items 0 and 2 have same input, should produce same output
-	if results[0].ComposedResult.Final != results[2].ComposedResult.Final {
+	if results[0].InferenceResult.Final != results[2].InferenceResult.Final {
 		t.Errorf("isolation failure: item0=%s item2=%s (should match)",
-			results[0].ComposedResult.Final, results[2].ComposedResult.Final)
+			results[0].InferenceResult.Final, results[2].InferenceResult.Final)
 	}
 	// Item 1 has different input, should differ
-	if results[0].ComposedResult.Final == results[1].ComposedResult.Final {
+	if results[0].InferenceResult.Final == results[1].InferenceResult.Final {
 		t.Error("different inputs produced same output — possible state leak")
 	}
 }
 
 // --- Test helpers ---
 
-type dummyEngine struct{ cat kinds.Category }
+type dummyEngine struct{}
 
 func (d *dummyEngine) Name() string { return "dummy" }
 func (d *dummyEngine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
-	k := kinds.KindBayesNets
-	if d.cat == kinds.CategoryAR {
-		k = kinds.KindLogicPrograms
-	}
-	return kinds.NewModelResult(datum.Label, 0.75, k,
+	return kinds.NewModelResult(datum.Label, 0.75, kinds.KindLogicPrograms,
 		[]string{"premise: input", "rule: test => output"}), nil
 }
 
-type isolationEngine struct{ cat kinds.Category }
+type isolationEngine struct{}
 
 func (e *isolationEngine) Name() string { return "isolation-test" }
 func (e *isolationEngine) Infer(datum kinds.Datum) (kinds.ModelResult, error) {
-	k := kinds.KindBayesNets
-	if e.cat == kinds.CategoryAR {
-		k = kinds.KindLogicPrograms
-	}
-	// Deterministic: prediction depends only on features
 	pred := "low"
 	conf := 0.3
 	if datum.Features["x"] > 0.5 {
 		pred = "high"
 		conf = 0.8
 	}
-	return kinds.NewModelResult(pred, conf, k,
+	return kinds.NewModelResult(pred, conf, kinds.KindLogicPrograms,
 		[]string{"premise: x=" + fmt.Sprintf("%.1f", datum.Features["x"]),
 			"rule: threshold => " + pred}), nil
 }

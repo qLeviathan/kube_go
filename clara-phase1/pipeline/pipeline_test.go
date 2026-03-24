@@ -17,8 +17,8 @@ func TestRunPipeline(t *testing.T) {
 	if len(result.SuperClaude.Verifiers) != cfg.NumVerifiers {
 		t.Errorf("expected %d verifiers, got %d", cfg.NumVerifiers, len(result.SuperClaude.Verifiers))
 	}
-	if len(result.SuperClaude.Models) != 2 {
-		t.Errorf("expected 2 models, got %d", len(result.SuperClaude.Models))
+	if len(result.SuperClaude.Models) != 1 {
+		t.Errorf("expected 1 model (AR), got %d", len(result.SuperClaude.Models))
 	}
 	if len(result.SuperClaude.Log) == 0 {
 		t.Error("expected boss log entries")
@@ -31,8 +31,8 @@ func TestRunPipeline(t *testing.T) {
 		if dr.Metrics.TotalItems == 0 {
 			t.Errorf("dataset %s: no items", name)
 		}
-		t.Logf("%s: items=%d accuracy=%.2f%% auroc=%.4f",
-			name, dr.Metrics.TotalItems, dr.Metrics.Accuracy*100, dr.Metrics.MeanAUROC)
+		t.Logf("%s: items=%d accuracy=%.2f%% confidence=%.4f",
+			name, dr.Metrics.TotalItems, dr.Metrics.Accuracy*100, dr.Metrics.MeanConfidence)
 	}
 
 	if result.Registry == nil {
@@ -44,26 +44,12 @@ func TestRunPipeline(t *testing.T) {
 	}
 }
 
-func TestAllStrategies(t *testing.T) {
-	for _, strategy := range []string{"ar_priority", "weighted_fusion", "consensus"} {
-		t.Run(strategy, func(t *testing.T) {
-			cfg := config.DefaultConfig()
-			cfg.Verbose = false
-			cfg.Strategy = strategy
-			result := Run(cfg)
-			if len(result.DatasetReports) == 0 {
-				t.Fatal("expected dataset reports")
-			}
-		})
-	}
-}
-
 func TestCustomAgentConfig(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Verbose = false
 	cfg.NumVerifiers = 3
 	cfg.NumPhDs = 4
-	cfg.PhDSpecialties = []string{"bayesian-lp", "logic-programs", "neural-symbolic"}
+	cfg.PhDSpecialties = []string{"logic-programs", "bayesian-lp", "constraint-programming"}
 
 	result := Run(cfg)
 

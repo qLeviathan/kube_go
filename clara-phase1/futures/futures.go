@@ -1,4 +1,4 @@
-// Package futures implements predictive future chaining for CLARA.
+// Package futures implements predictive future chaining for CARLA.
 // It looks at current facts and predicts what rules will fire,
 // pre-computes likely inference paths, and caches predictions.
 // Learns prediction accuracy over time via the memory store.

@@ -1,8 +1,8 @@
-// Package pipeline wires together all CLARA components
+// Package pipeline wires together all CARLA components
 // and runs the full evaluation end-to-end.
-// Phase 2 adds: persistent memory, swarm coordination,
+// Integrates: persistent memory, swarm coordination,
 // recursive rule rewriting, and future chain prediction.
-// All configuration is dynamic — loaded from config, files, and data agents.
+// Pure rules engine — no ML. All configuration is dynamic.
 // No recursion. All inference state is isolated per-datum.
 package pipeline
 
@@ -14,13 +14,11 @@ import (
 
 	"github.com/clara-phase1/agents"
 	"github.com/clara-phase1/ar"
-	"github.com/clara-phase1/compose"
 	"github.com/clara-phase1/config"
 	"github.com/clara-phase1/dataagents"
 	"github.com/clara-phase1/futures"
 	"github.com/clara-phase1/kinds"
 	"github.com/clara-phase1/memory"
-	"github.com/clara-phase1/ml"
 	"github.com/clara-phase1/report"
 	"github.com/clara-phase1/rewriter"
 	"github.com/clara-phase1/swarm"
@@ -36,13 +34,13 @@ type Result struct {
 	Registry            *dataagents.RegistryAgent
 
 	// Phase 2 results
-	Memory         *memory.Store
-	Swarm          *swarm.Controller
-	RewriteReport  *rewriter.RewriteReport
+	Memory          *memory.Store
+	Swarm           *swarm.Controller
+	RewriteReport   *rewriter.RewriteReport
 	FuturePredictor *futures.Predictor
 }
 
-// Run executes the full CLARA pipeline with dynamic configuration.
+// Run executes the full CARLA pipeline with dynamic configuration.
 func Run(cfg config.Config) Result {
 	startTime := time.Now()
 	result := Result{DatasetReports: make(map[string]report.DatasetReport)}
@@ -55,21 +53,13 @@ func Run(cfg config.Config) Result {
 		fmt.Printf("[Memory] %s\n", mem.Summary())
 	}
 
-	// === Step 2: Load engines from config files ===
+	// === Step 2: Load AR engine ===
 	arEngine, err := loadAREngine(cfg)
 	if err != nil && cfg.Verbose {
 		fmt.Printf("[Pipeline] AR rules file not found, using defaults: %v\n", err)
 	}
 	if arEngine == nil {
 		arEngine = buildDefaultAREngine()
-	}
-
-	mlEngine, err := loadMLEngine(cfg)
-	if err != nil && cfg.Verbose {
-		fmt.Printf("[Pipeline] BayesNet file not found, using defaults: %v\n", err)
-	}
-	if mlEngine == nil {
-		mlEngine = buildDefaultMLEngine()
 	}
 
 	// Get the rule set for rewriter and futures
@@ -104,7 +94,6 @@ func Run(cfg config.Config) Result {
 		for i := len(cfg.PhDSpecialties); i < cfg.NumPhDs; i++ {
 			ctrl.SpawnPhD(fmt.Sprintf("phd-%d", i+1), "general")
 		}
-		ctrl.SpawnModel("model-bayesnet", kinds.KindBayesNets, mlEngine)
 		ctrl.SpawnModel("model-logicprog", kinds.KindLogicPrograms, arEngine)
 
 		boss = ctrl.Boss
@@ -114,7 +103,7 @@ func Run(cfg config.Config) Result {
 			fmt.Printf("[Swarm] %d agents, mesh network active\n", status.TotalAgents)
 		}
 	} else {
-		// Traditional boss mode (Phase 1 compatible)
+		// Traditional boss mode
 		boss = agents.NewSuperClaudeAgent("super-claude-boss")
 		for i := 0; i < cfg.NumVerifiers; i++ {
 			boss.AddVerifier(agents.NewVerifierAgent(fmt.Sprintf("verifier-%d", i+1)))
@@ -128,7 +117,6 @@ func Run(cfg config.Config) Result {
 		for i := len(cfg.PhDSpecialties); i < cfg.NumPhDs; i++ {
 			boss.AddPhD(agents.NewPhDAgent(fmt.Sprintf("phd-%d", i+1), "general"))
 		}
-		boss.AddModel(agents.NewModelAgent("model-bayesnet", kinds.KindBayesNets, mlEngine))
 		boss.AddModel(agents.NewModelAgent("model-logicprog", kinds.KindLogicPrograms, arEngine))
 	}
 
@@ -149,8 +137,8 @@ func Run(cfg config.Config) Result {
 	// === Step 5: Send directive to boss ===
 	boss.Process(agents.Message{
 		From: "pipeline", To: boss.ID(), Type: "directive",
-		Payload:   fmt.Sprintf("Phase 2 evaluation: strategy=%s, soa=%.2f, swarm=%v, rewriter=%v, futures=%v",
-			cfg.Strategy, cfg.SOAAUROC, cfg.SwarmEnabled, cfg.EnableRewriter, cfg.EnableFutures),
+		Payload: fmt.Sprintf("CARLA evaluation: strategy=%s, swarm=%v, rewriter=%v, futures=%v",
+			cfg.Strategy, cfg.SwarmEnabled, cfg.EnableRewriter, cfg.EnableFutures),
 		Timestamp: time.Now(),
 	})
 
@@ -182,14 +170,9 @@ func Run(cfg config.Config) Result {
 		fmt.Print(registry.Summary())
 	}
 
-	// === Step 7: Build composition pipeline ===
-	strategy := compose.CompositionStrategy(cfg.Strategy)
-	pipe := compose.NewPipeline("clara-phase1", mlEngine, arEngine,
-		kinds.KindBayesNets, kinds.KindLogicPrograms, strategy)
-
-	// === Step 8: Run pipeline on all registered valid datasets ===
+	// === Step 7: Run inference on all registered valid datasets ===
 	entries := registry.GetValid()
-	rulesFired := make(map[string]int) // track rule fires for memory
+	rulesFired := make(map[string]int)
 
 	for i := 0; i < len(entries); i++ {
 		entry := entries[i]
@@ -207,64 +190,77 @@ func Run(cfg config.Config) Result {
 			}
 		}
 
-		results, batchMetrics := pipe.RunBatch(ds)
-		phase1Metrics := compose.EvaluatePhase1Metrics(batchMetrics, cfg.SOAAUROC)
+		// Run AR inference on each datum
+		results := make([]kinds.InferenceResult, 0, len(ds.Items))
+		for j := 0; j < len(ds.Items); j++ {
+			mr, inferErr := arEngine.Infer(ds.Items[j])
+			if inferErr != nil {
+				mr = kinds.NewModelResult("error", 0, kinds.KindLogicPrograms, []string{"inference error"})
+			}
+			mr.Kind = kinds.KindLogicPrograms
+
+			ir := kinds.InferenceResult{
+				Result:     mr,
+				Final:      mr.Prediction,
+				Confidence: mr.Confidence,
+				Verified:   mr.Confidence > cfg.ConfidenceThreshold,
+				Explained:  len(mr.ProofTrace) > 0,
+			}
+			results = append(results, ir)
+		}
+
+		batchMetrics := report.ComputeBatchMetrics(results, ds)
+		evalMetrics := report.EvaluateMetrics(batchMetrics)
 
 		dr := report.DatasetReport{
 			DatasetName: ds.Name,
 			Results:     results,
 			Metrics:     batchMetrics,
-			Phase1Eval:  phase1Metrics,
-			SOAAUROC:    cfg.SOAAUROC,
+			Eval:        evalMetrics,
 		}
 		result.DatasetReports[ds.Name] = dr
 
 		// Record patterns and rule fires in memory
 		domain := entry.Meta.Domain
-		for _, cr := range results {
-			// Record inference pattern
+		for _, ir := range results {
 			featureNames := make([]string, 0)
 			for k := range ds.Items[0].Features {
 				featureNames = append(featureNames, k)
 			}
-			mem.RecordPattern(featureNames, cr.Final, cr.AUROC)
+			mem.RecordPattern(featureNames, ir.Final, ir.Confidence)
 
-			// Track rule fires (from AR proof traces)
-			for _, trace := range cr.ARResult.ProofTrace {
+			for _, trace := range ir.Result.ProofTrace {
 				if len(trace) > 5 && trace[:5] == "rule[" {
-					// Extract rule ID from "rule[id]: ..."
 					end := 5
 					for end < len(trace) && trace[end] != ']' {
 						end++
 					}
 					if end < len(trace) {
 						ruleID := trace[5:end]
-						correct := cr.Final == cr.ARResult.Prediction
+						correct := ir.Final == ir.Result.Prediction
 						mem.RecordRuleFire(ruleID, correct, domain)
 						rulesFired[ruleID]++
 					}
 				}
 			}
 
-			// Record future prediction outcome
 			if predictor != nil {
-				facts := datumToFactsFromResult(cr)
-				predictor.RecordOutcome(facts, cr.Final)
+				facts := datumToFactsFromResult(ir)
+				predictor.RecordOutcome(facts, ir.Final)
 			}
 		}
 
-		// Learn domain facts from results
 		mem.LearnFact("dataset_accuracy", fmt.Sprintf("%.4f", batchMetrics.Accuracy), domain, "pipeline")
-		mem.LearnFact("dataset_auroc", fmt.Sprintf("%.4f", batchMetrics.MeanAUROC), domain, "pipeline")
+		mem.LearnFact("dataset_confidence", fmt.Sprintf("%.4f", batchMetrics.MeanConfidence), domain, "pipeline")
 
 		if cfg.Verbose {
-			fmt.Printf("[Pipeline] %s | Items: %d | Accuracy: %.2f%% | AUROC: %.4f | Quality: %.2f\n",
+			fmt.Printf("[Pipeline] %s | Items: %d | Accuracy: %.2f%% | Confidence: %.4f | Quality: %.2f\n",
 				ds.Name, batchMetrics.TotalItems, batchMetrics.Accuracy*100,
-				batchMetrics.MeanAUROC, entry.Quality.OverallScore)
+				batchMetrics.MeanConfidence, entry.Quality.OverallScore)
 		}
 	}
 
-	// === Step 9: Run SuperClaude boss on first valid dataset ===
+	// === Step 8: Run SuperClaude boss on first valid dataset ===
 	if len(entries) > 0 {
 		firstDS := entries[0].Dataset
 		bossMsg := agents.Message{
@@ -279,20 +275,19 @@ func Run(cfg config.Config) Result {
 		}
 	}
 
-	// === Step 10: Recursive rule rewriting ===
+	// === Step 9: Recursive rule rewriting ===
 	if cfg.EnableRewriter {
 		rw := rewriter.NewRewriter(mem, cfg.RewriterMinFires)
 		rwReport := rw.Evaluate(currentRuleSet)
 
-		// Propose new rules from observed patterns
 		topPatterns := mem.GetTopPatterns(20)
 		proposals := rw.ProposeFromPatterns(topPatterns, currentRuleSet)
 		for _, p := range proposals {
 			rwReport.Actions = append(rwReport.Actions, rewriter.RewriteAction{
-				Type:     "propose",
-				RuleID:   p.ID,
-				Reason:   fmt.Sprintf("proposed from pattern frequency"),
-				NewRules: []ar.RuleSpec{p},
+				Type:      "propose",
+				RuleID:    p.ID,
+				Reason:    "proposed from pattern frequency",
+				NewRules:  []ar.RuleSpec{p},
 				Timestamp: time.Now(),
 			})
 			rwReport.Proposed++
@@ -307,7 +302,7 @@ func Run(cfg config.Config) Result {
 		}
 	}
 
-	// === Step 11: Record run summary in memory ===
+	// === Step 10: Record run summary in memory ===
 	duration := time.Since(startTime)
 	rewrites := 0
 	if result.RewriteReport != nil {
@@ -329,7 +324,7 @@ func Run(cfg config.Config) Result {
 		SwarmPeak:  peakAgents,
 	})
 
-	// === Step 12: Save memory ===
+	// === Step 11: Save memory ===
 	if err := mem.Save(); err != nil {
 		if cfg.Verbose {
 			fmt.Printf("[Memory] Save error: %v\n", err)
@@ -338,12 +333,12 @@ func Run(cfg config.Config) Result {
 		fmt.Printf("[Memory] Saved: %s\n", mem.Summary())
 	}
 
-	// === Step 13: Save inferences if configured ===
+	// === Step 12: Save inferences if configured ===
 	if cfg.SaveInferences && cfg.InferencesFile != "" {
 		saveInferences(cfg.InferencesFile, result.DatasetReports)
 	}
 
-	// === Step 14: Generate automated report ===
+	// === Step 13: Generate automated report ===
 	gen := report.NewGenerator()
 	result.Report = gen.GenerateFullReport(result.DatasetReports, result.OrchestratorResults, boss)
 
@@ -357,11 +352,6 @@ func Run(cfg config.Config) Result {
 // loadAREngine tries to load AR rules from a JSON file.
 func loadAREngine(cfg config.Config) (*ar.Engine, error) {
 	return ar.LoadRulesFromFile(cfg.RulesFile)
-}
-
-// loadMLEngine tries to load a BayesNet from a JSON file.
-func loadMLEngine(cfg config.Config) (*ml.Engine, error) {
-	return ml.LoadBayesNetFromFile(cfg.BayesNetFile)
 }
 
 // loadRuleSet loads the rule set for rewriter/futures use.
@@ -381,13 +371,6 @@ func loadRuleSet(cfg config.Config) ar.RuleSet {
 func buildDefaultAREngine() *ar.Engine {
 	data, _ := json.Marshal(ar.DefaultRuleSet())
 	engine, _ := ar.LoadRulesFromJSON(data)
-	return engine
-}
-
-// buildDefaultMLEngine creates the built-in ML engine (fallback).
-func buildDefaultMLEngine() *ml.Engine {
-	data, _ := json.Marshal(ml.DefaultBayesNetSpec())
-	engine, _ := ml.LoadBayesNetFromJSON(data)
 	return engine
 }
 
@@ -412,10 +395,10 @@ func datumToFacts(d kinds.Datum) []string {
 	return facts
 }
 
-// datumToFactsFromResult extracts feature facts from a composed result's proof trace.
-func datumToFactsFromResult(cr kinds.ComposedResult) []string {
+// datumToFactsFromResult extracts feature facts from an inference result's proof trace.
+func datumToFactsFromResult(ir kinds.InferenceResult) []string {
 	var facts []string
-	for _, trace := range cr.ARResult.ProofTrace {
+	for _, trace := range ir.Result.ProofTrace {
 		if len(trace) > 6 && trace[:6] == "fact: " {
 			facts = append(facts, trace[6:])
 		}

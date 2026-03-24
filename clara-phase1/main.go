@@ -1,13 +1,13 @@
-// CLARA Phase 2 -- Compositional Learning-And-Reasoning for AI
-// Autonomous Intelligence Platform with Recursive Rule Rewriting,
-// Future Chaining, and Autoscaled Swarm Coordination.
+// CARLA -- Compositional Autonomous Reasoning & Learning Architecture
+// Self-evolving rules engine with agent orchestration,
+// recursive rule rewriting, future chaining, and autoscaled swarm.
 //
 // Usage:
 //   go run main.go                    # Interactive mode (questionnaire)
 //   go run main.go --auto             # Auto mode (all defaults)
 //   go run main.go --config file.json # Load config from file
 //   go run main.go --genconfig        # Generate default config file
-//   go run main.go --gendata          # Generate default rule/model files
+//   go run main.go --gendata          # Generate default rule files
 package main
 
 import (
@@ -18,15 +18,14 @@ import (
 	"github.com/clara-phase1/ar"
 	"github.com/clara-phase1/cli"
 	"github.com/clara-phase1/config"
-	"github.com/clara-phase1/ml"
 	"github.com/clara-phase1/pipeline"
 	"github.com/clara-phase1/report"
 )
 
 func main() {
 	fmt.Println("================================================================")
-	fmt.Println("  CLARA Phase 2 -- Autonomous Intelligence Platform")
-	fmt.Println("  Recursive Rule Rewriting | Future Chaining | Swarm")
+	fmt.Println("  CARLA -- Autonomous Intelligence Platform")
+	fmt.Println("  Self-Evolving Rules Engine | Future Chaining | Swarm")
 	fmt.Println("  Boss: SuperClaude Agent | Dynamic Configuration")
 	fmt.Println("================================================================")
 	fmt.Println()
@@ -60,14 +59,14 @@ func main() {
 	fmt.Printf("  Datasets:  %d\n", len(result.DatasetReports))
 	fmt.Printf("  Results:   %d\n", len(result.OrchestratorResults))
 
-	// Phase 2: Memory summary
+	// Memory summary
 	if result.Memory != nil {
 		fmt.Printf("\nPerpetual Memory:\n")
 		fmt.Printf("  %s\n", result.Memory.Summary())
 		fmt.Printf("  Total runs: %d\n", result.Memory.TotalRuns())
 	}
 
-	// Phase 2: Rewriter summary
+	// Rewriter summary
 	if result.RewriteReport != nil {
 		rr := result.RewriteReport
 		fmt.Printf("\nRecursive Rule Rewriter:\n")
@@ -79,7 +78,7 @@ func main() {
 		fmt.Printf("  Split:        %d\n", rr.Split)
 	}
 
-	// Phase 2: Swarm summary
+	// Swarm summary
 	if result.Swarm != nil {
 		status := result.Swarm.Status()
 		fmt.Printf("\nSwarm Status:\n")
@@ -91,7 +90,7 @@ func main() {
 		}
 	}
 
-	// Phase 2: Future predictor summary
+	// Future predictor summary
 	if result.FuturePredictor != nil {
 		fmt.Printf("\nFuture Chain Predictor:\n")
 		fmt.Printf("  %s\n", result.FuturePredictor.Summary())
@@ -101,23 +100,18 @@ func main() {
 func resolveConfig() config.Config {
 	args := os.Args[1:]
 
-	// Check for special commands
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--genconfig":
 			cfg := config.DefaultConfig()
-			cfg.SaveToFile("clara_config.json")
-			fmt.Println("Generated clara_config.json")
+			cfg.SaveToFile("carla_config.json")
+			fmt.Println("Generated carla_config.json")
 			os.Exit(0)
 
 		case "--gendata":
 			rulesJSON, _ := json.MarshalIndent(ar.DefaultRuleSet(), "", "  ")
 			os.WriteFile("data/rules/default.json", rulesJSON, 0644)
 			fmt.Println("Generated data/rules/default.json")
-
-			bnJSON, _ := json.MarshalIndent(ml.DefaultBayesNetSpec(), "", "  ")
-			os.WriteFile("data/models/default.json", bnJSON, 0644)
-			fmt.Println("Generated data/models/default.json")
 			os.Exit(0)
 
 		case "--auto":
@@ -153,19 +147,19 @@ func resolveConfig() config.Config {
 }
 
 func printUsage() {
-	fmt.Println(`CLARA Phase 1 — Usage:
+	fmt.Println(`CARLA — Autonomous Intelligence Platform
 
+Usage:
   go run main.go                    Interactive mode (questionnaire)
   go run main.go --auto             Auto mode (all defaults)
   go run main.go --config file.json Load config from JSON file
   go run main.go --genconfig        Generate default config file
-  go run main.go --gendata          Generate default rule/model JSON files
+  go run main.go --gendata          Generate default rule JSON files
   go run main.go --help             Show this help
 
 Data Files:
   Place CSV datasets in data/datasets/ (auto-discovered)
   Place AR rules in data/rules/ (JSON format)
-  Place BayesNet models in data/models/ (JSON format)
 
 CSV Format:
   feature1,feature2,...,label

@@ -13,9 +13,6 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Strategy != "ar_priority" {
 		t.Errorf("expected ar_priority, got %s", cfg.Strategy)
 	}
-	if len(cfg.MLKinds) == 0 {
-		t.Error("expected ML kinds")
-	}
 	if len(cfg.ARKinds) == 0 {
 		t.Error("expected AR kinds")
 	}
@@ -26,7 +23,6 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestSaveAndLoadConfig(t *testing.T) {
 	cfg := DefaultConfig()
-	cfg.SOAAUROC = 0.75
 	cfg.Strategy = "consensus"
 
 	dir := t.TempDir()
@@ -41,9 +37,6 @@ func TestSaveAndLoadConfig(t *testing.T) {
 		t.Fatalf("load error: %v", err)
 	}
 
-	if loaded.SOAAUROC != 0.75 {
-		t.Errorf("expected SOA 0.75, got %f", loaded.SOAAUROC)
-	}
 	if loaded.Strategy != "consensus" {
 		t.Errorf("expected consensus, got %s", loaded.Strategy)
 	}
@@ -63,26 +56,21 @@ func TestBuildInteractiveAuto(t *testing.T) {
 	if cfg.Strategy != "ar_priority" {
 		t.Errorf("expected default strategy, got %s", cfg.Strategy)
 	}
-	if len(cfg.MLKinds) == 0 {
-		t.Error("expected ML kinds from defaults")
+	if len(cfg.ARKinds) == 0 {
+		t.Error("expected AR kinds from defaults")
 	}
 }
 
 func TestBuildInteractiveOverrides(t *testing.T) {
 	overrides := map[string]string{
 		"strategy":      "consensus",
-		"soa_auroc":     "0.80",
 		"num_verifiers": "5",
-		"ml_kinds":      "bayes-nets,decision-tree",
 	}
 	p := cli.NewAutoPrompter(overrides)
 	cfg := BuildInteractive(p)
 
 	if cfg.Strategy != "consensus" {
 		t.Errorf("expected consensus, got %s", cfg.Strategy)
-	}
-	if cfg.SOAAUROC != 0.80 {
-		t.Errorf("expected SOA 0.80, got %f", cfg.SOAAUROC)
 	}
 	if cfg.NumVerifiers != 5 {
 		t.Errorf("expected 5 verifiers, got %d", cfg.NumVerifiers)
@@ -93,7 +81,6 @@ func TestConfigSaveDoesNotExist(t *testing.T) {
 	cfg := DefaultConfig()
 	err := cfg.SaveToFile("/nonexistent/dir/config.json")
 	if err == nil {
-		// This should fail since directory doesn't exist
 		os.Remove("/nonexistent/dir/config.json")
 	}
 }

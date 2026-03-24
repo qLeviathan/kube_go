@@ -1,4 +1,4 @@
-// Package explain implements the CLARA Phase 1 explainability system.
+// Package explain implements the CARLA explainability system.
 // Produces hierarchical, fine-grained, natural-deduction-style proofs
 // with unfolding expansion <= 10 between hierarchical levels.
 // No recursion.
@@ -15,12 +15,12 @@ import (
 type ProofStep struct {
 	Level      int
 	StepNumber int
-	Type       string // "premise", "rule", "conclusion", "evidence", "propagation"
+	Type       string // "premise", "rule", "conclusion", "evidence"
 	Content    string
 	Justified  bool
 }
 
-// Proof is a complete hierarchical proof for a composed result.
+// Proof is a complete hierarchical proof for an inference result.
 type Proof struct {
 	ID        string
 	Steps     []ProofStep
@@ -30,7 +30,7 @@ type Proof struct {
 	Unfolding int // max steps at one hierarchical level, must be <= 10
 }
 
-// ProofBuilder builds proofs iteratively from composed results.
+// ProofBuilder builds proofs iteratively from inference results.
 type ProofBuilder struct {
 	proofCounter int
 }
@@ -39,9 +39,9 @@ func NewProofBuilder() *ProofBuilder {
 	return &ProofBuilder{}
 }
 
-// BuildProof constructs a hierarchical proof from a ComposedResult.
-// Caps each component's trace at 10 steps (DARPA unfolding requirement).
-func (pb *ProofBuilder) BuildProof(cr kinds.ComposedResult) Proof {
+// BuildProof constructs a hierarchical proof from an InferenceResult.
+// Caps the trace at 10 steps (unfolding requirement).
+func (pb *ProofBuilder) BuildProof(ir kinds.InferenceResult) Proof {
 	pb.proofCounter++
 	proof := Proof{ID: fmt.Sprintf("proof-%d", pb.proofCounter)}
 
@@ -51,68 +51,29 @@ func (pb *ProofBuilder) BuildProof(cr kinds.ComposedResult) Proof {
 	stepNum++
 	proof.Steps = append(proof.Steps, ProofStep{
 		Level: 0, StepNumber: stepNum, Type: "conclusion",
-		Content:   fmt.Sprintf("FINAL: %s (AUROC=%.4f, Verified=%v)", cr.Final, cr.AUROC, cr.Verified),
+		Content:   fmt.Sprintf("FINAL: %s (Confidence=%.4f, Verified=%v)", ir.Final, ir.Confidence, ir.Verified),
 		Justified: true,
 	})
 
-	// Level 1: ML component
+	// Level 1: AR reasoning component
 	stepNum++
 	proof.Steps = append(proof.Steps, ProofStep{
 		Level: 1, StepNumber: stepNum, Type: "evidence",
-		Content:   fmt.Sprintf("ML[%s]: prediction=%s confidence=%.4f", cr.MLResult.Kind.Name, cr.MLResult.Prediction, cr.MLResult.Confidence),
-		Justified: len(cr.MLResult.ProofTrace) > 0,
-	})
-
-	// Level 2: ML proof trace (capped at 10)
-	mlCap := len(cr.MLResult.ProofTrace)
-	if mlCap > 10 {
-		mlCap = 10
-	}
-	for i := 0; i < mlCap; i++ {
-		stepNum++
-		proof.Steps = append(proof.Steps, ProofStep{
-			Level: 2, StepNumber: stepNum,
-			Type:      classifyTraceStep(cr.MLResult.ProofTrace[i]),
-			Content:   cr.MLResult.ProofTrace[i],
-			Justified: true,
-		})
-	}
-
-	// Level 1: AR component
-	stepNum++
-	proof.Steps = append(proof.Steps, ProofStep{
-		Level: 1, StepNumber: stepNum, Type: "evidence",
-		Content:   fmt.Sprintf("AR[%s]: prediction=%s confidence=%.4f", cr.ARResult.Kind.Name, cr.ARResult.Prediction, cr.ARResult.Confidence),
-		Justified: len(cr.ARResult.ProofTrace) > 0,
+		Content:   fmt.Sprintf("AR[%s]: prediction=%s confidence=%.4f", ir.Result.Kind.Name, ir.Result.Prediction, ir.Result.Confidence),
+		Justified: len(ir.Result.ProofTrace) > 0,
 	})
 
 	// Level 2: AR proof trace (capped at 10)
-	arCap := len(cr.ARResult.ProofTrace)
-	if arCap > 10 {
-		arCap = 10
+	cap := len(ir.Result.ProofTrace)
+	if cap > 10 {
+		cap = 10
 	}
-	for i := 0; i < arCap; i++ {
+	for i := 0; i < cap; i++ {
 		stepNum++
 		proof.Steps = append(proof.Steps, ProofStep{
 			Level: 2, StepNumber: stepNum,
-			Type:      classifyTraceStep(cr.ARResult.ProofTrace[i]),
-			Content:   cr.ARResult.ProofTrace[i],
-			Justified: true,
-		})
-	}
-
-	// Level 1: Composition reasoning
-	stepNum++
-	if cr.MLResult.Prediction == cr.ARResult.Prediction {
-		proof.Steps = append(proof.Steps, ProofStep{
-			Level: 1, StepNumber: stepNum, Type: "rule",
-			Content:   fmt.Sprintf("COMPOSE: ML and AR agree on %q => high confidence", cr.Final),
-			Justified: true,
-		})
-	} else {
-		proof.Steps = append(proof.Steps, ProofStep{
-			Level: 1, StepNumber: stepNum, Type: "rule",
-			Content:   fmt.Sprintf("COMPOSE: ML=%q AR=%q disagree => final=%q", cr.MLResult.Prediction, cr.ARResult.Prediction, cr.Final),
+			Type:      classifyTraceStep(ir.Result.ProofTrace[i]),
+			Content:   ir.Result.ProofTrace[i],
 			Justified: true,
 		})
 	}
@@ -120,7 +81,7 @@ func (pb *ProofBuilder) BuildProof(cr kinds.ComposedResult) Proof {
 	proof.MaxDepth = 2
 	proof.Unfolding = computeMaxUnfolding(proof.Steps)
 	proof.Sound = allJustified(proof.Steps)
-	proof.Complete = len(cr.MLResult.ProofTrace) > 0 && len(cr.ARResult.ProofTrace) > 0
+	proof.Complete = len(ir.Result.ProofTrace) > 0
 	return proof
 }
 
@@ -132,10 +93,8 @@ func classifyTraceStep(s string) string {
 		return "rule"
 	case strings.HasPrefix(s, "conclusion:"):
 		return "conclusion"
-	case strings.HasPrefix(s, "evidence:"), strings.HasPrefix(s, "prior("):
+	case strings.HasPrefix(s, "evidence:"):
 		return "evidence"
-	case strings.HasPrefix(s, "propagate("):
-		return "propagation"
 	default:
 		return "premise"
 	}

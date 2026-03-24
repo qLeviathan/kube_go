@@ -1,4 +1,4 @@
-// Package testdata provides dummy test datasets for CLARA Phase 1 evaluation.
+// Package testdata provides dummy test datasets for CARLA evaluation.
 // Three DARPA-suggested application task domains:
 // 1. Medical treatment decisions (multi-condition guidance)
 // 2. Course of Action (COA) planning

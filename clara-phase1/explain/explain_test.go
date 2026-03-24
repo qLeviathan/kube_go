@@ -8,17 +8,8 @@ import (
 
 func TestBuildProof(t *testing.T) {
 	pb := NewProofBuilder()
-	cr := kinds.ComposedResult{
-		MLResult: kinds.ModelResult{
-			Prediction: "treat_A", Confidence: 0.85, Kind: kinds.KindBayesNets,
-			ProofTrace: []string{
-				"evidence: 3 features observed",
-				"prior(blood_pressure): beliefs updated",
-				"propagate(decision): P(high)=0.7 P(low)=0.3",
-				"conclusion: treat_A=P(0.85) via decision",
-			},
-		},
-		ARResult: kinds.ModelResult{
+	ir := kinds.InferenceResult{
+		Result: kinds.ModelResult{
 			Prediction: "treat_A", Confidence: 0.9, Kind: kinds.KindLogicPrograms,
 			ProofTrace: []string{
 				"premise: has_feature(blood_pressure, high)",
@@ -26,10 +17,10 @@ func TestBuildProof(t *testing.T) {
 				"rule[med-r1]: bp_high ^ hr_high => treat_A_indicated",
 			},
 		},
-		Final: "treat_A", Verified: true, AUROC: 0.875, Explained: true,
+		Final: "treat_A", Verified: true, Confidence: 0.9, Explained: true,
 	}
 
-	proof := pb.BuildProof(cr)
+	proof := pb.BuildProof(ir)
 	if !proof.Sound {
 		t.Error("expected sound")
 	}
@@ -57,27 +48,23 @@ func TestProofUnfoldingCapped(t *testing.T) {
 		longTrace[i] = "premise: step"
 	}
 
-	cr := kinds.ComposedResult{
-		MLResult: kinds.ModelResult{
-			Prediction: "X", Confidence: 0.7, Kind: kinds.KindBayesNets,
-			ProofTrace: longTrace,
-		},
-		ARResult: kinds.ModelResult{
+	ir := kinds.InferenceResult{
+		Result: kinds.ModelResult{
 			Prediction: "X", Confidence: 0.8, Kind: kinds.KindLogicPrograms,
 			ProofTrace: longTrace,
 		},
-		Final: "X", AUROC: 0.75,
+		Final: "X", Confidence: 0.8,
 	}
 
-	proof := pb.BuildProof(cr)
+	proof := pb.BuildProof(ir)
 	level2Count := 0
 	for _, s := range proof.Steps {
 		if s.Level == 2 {
 			level2Count++
 		}
 	}
-	// Each component capped at 10 => max 20 level-2 steps
-	if level2Count > 20 {
-		t.Errorf("expected <=20 level-2 steps, got %d", level2Count)
+	// Capped at 10 level-2 steps
+	if level2Count > 10 {
+		t.Errorf("expected <=10 level-2 steps, got %d", level2Count)
 	}
 }

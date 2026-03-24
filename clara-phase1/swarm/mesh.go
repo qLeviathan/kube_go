@@ -1,4 +1,4 @@
-// Package swarm implements autoscaled agent swarm coordination for CLARA.
+// Package swarm implements autoscaled agent swarm coordination for CARLA.
 // Agents communicate via mesh topology (peer-to-peer), not star topology.
 // The swarm controller manages agent lifecycle, the mesh handles communication,
 // and the autoscaler dynamically spawns/retires agents based on load.

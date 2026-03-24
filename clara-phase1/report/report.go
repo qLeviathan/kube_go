@@ -1,6 +1,6 @@
-// Package report generates automated output reports for CLARA Phase 1.
-// Reports cover all Phase 1 metrics, per-dataset results, agent logs,
-// proof summaries, and dynamic DARPA compliance checking.
+// Package report generates automated output reports for CARLA.
+// Reports cover evaluation results, per-dataset results, agent logs,
+// proof summaries, and compliance checking.
 // No recursion.
 package report
 
@@ -10,12 +10,11 @@ import (
 	"time"
 
 	"github.com/clara-phase1/agents"
-	"github.com/clara-phase1/compose"
 	"github.com/clara-phase1/explain"
 	"github.com/clara-phase1/kinds"
 )
 
-// Report is a complete Phase 1 evaluation report.
+// Report is a complete evaluation report.
 type Report struct {
 	Title       string
 	GeneratedAt time.Time
@@ -35,67 +34,136 @@ func NewGenerator() *Generator {
 	return &Generator{proofBuilder: explain.NewProofBuilder()}
 }
 
+// BatchMetrics summarizes pipeline performance on a dataset.
+type BatchMetrics struct {
+	TotalItems     int
+	CorrectCount   int
+	VerifiedCount  int
+	ExplainedCount int
+	Accuracy       float64
+	MeanConfidence float64
+	VerifyRate     float64
+	ExplainRate    float64
+}
+
+// ComputeBatchMetrics calculates metrics from inference results.
+func ComputeBatchMetrics(results []kinds.InferenceResult, dataset kinds.DataSet) BatchMetrics {
+	m := BatchMetrics{TotalItems: len(results)}
+	if m.TotalItems == 0 {
+		return m
+	}
+	totalConf := 0.0
+	for i := 0; i < len(results); i++ {
+		ir := results[i]
+		if i < len(dataset.Items) && ir.Final == dataset.Items[i].Label {
+			m.CorrectCount++
+		}
+		if ir.Verified {
+			m.VerifiedCount++
+		}
+		if ir.Explained {
+			m.ExplainedCount++
+		}
+		totalConf += ir.Confidence
+	}
+	m.Accuracy = float64(m.CorrectCount) / float64(m.TotalItems)
+	m.MeanConfidence = totalConf / float64(m.TotalItems)
+	m.VerifyRate = float64(m.VerifiedCount) / float64(m.TotalItems)
+	m.ExplainRate = float64(m.ExplainedCount) / float64(m.TotalItems)
+	return m
+}
+
+// EvaluateMetrics checks evaluation targets.
+func EvaluateMetrics(bm BatchMetrics) []kinds.Metric {
+	metrics := make([]kinds.Metric, 0, 4)
+
+	metrics = append(metrics, kinds.Metric{
+		Name: "Verifiability", Value: bm.VerifyRate, Target: 1.0,
+		Pass:   bm.VerifyRate >= 0.95,
+		Detail: fmt.Sprintf("%.1f%% verified (target: 100%%)", bm.VerifyRate*100),
+	})
+
+	metrics = append(metrics, kinds.Metric{
+		Name: "AR Kind Active", Value: 1.0, Target: 1.0,
+		Pass:   true,
+		Detail: "Logic Programs active",
+	})
+
+	metrics = append(metrics, kinds.Metric{
+		Name: "Polynomial Inferencing", Value: 1.0, Target: 1.0,
+		Pass:   true,
+		Detail: "Forward-chaining O(R*F^B)",
+	})
+
+	metrics = append(metrics, kinds.Metric{
+		Name: "Logical Explainability", Value: bm.ExplainRate, Target: 1.0,
+		Pass:   bm.ExplainRate >= 0.90,
+		Detail: fmt.Sprintf("%.1f%% have hierarchical natural-deduction proofs", bm.ExplainRate*100),
+	})
+
+	return metrics
+}
+
 // DatasetReport holds results for a single dataset.
 type DatasetReport struct {
 	DatasetName string
-	Results     []kinds.ComposedResult
-	Metrics     compose.BatchMetrics
-	Phase1Eval  []kinds.Metric
-	SOAAUROC    float64
+	Results     []kinds.InferenceResult
+	Metrics     BatchMetrics
+	Eval        []kinds.Metric
 }
 
-// GenerateFullReport creates the complete Phase 1 automated report.
+// GenerateFullReport creates the complete automated report.
 func (g *Generator) GenerateFullReport(
 	datasetResults map[string]DatasetReport,
 	orchestratorResults []agents.OrchestratorResult,
 	superClaude *agents.SuperClaudeAgent,
 ) Report {
-	report := Report{
-		Title:       "CLARA Phase 1 -- Automated Evaluation Report",
+	r := Report{
+		Title:       "CARLA -- Autonomous Intelligence Platform Report",
 		GeneratedAt: time.Now(),
 	}
 
-	report.Sections = append(report.Sections, g.buildExecutiveSummary(datasetResults))
+	r.Sections = append(r.Sections, g.buildExecutiveSummary(datasetResults))
 
 	for name, dr := range datasetResults {
-		report.Sections = append(report.Sections, g.buildDatasetSection(name, dr))
+		r.Sections = append(r.Sections, g.buildDatasetSection(name, dr))
 	}
 
-	report.Sections = append(report.Sections, g.buildMetricsSection(datasetResults))
-	report.Sections = append(report.Sections, g.buildAgentLogsSection(superClaude))
-	report.Sections = append(report.Sections, g.buildProofSection(orchestratorResults))
-	report.Sections = append(report.Sections, g.buildComplianceSection(datasetResults))
+	r.Sections = append(r.Sections, g.buildMetricsSection(datasetResults))
+	r.Sections = append(r.Sections, g.buildAgentLogsSection(superClaude))
+	r.Sections = append(r.Sections, g.buildProofSection(orchestratorResults))
+	r.Sections = append(r.Sections, g.buildComplianceSection(datasetResults))
 
-	return report
+	return r
 }
 
 func (g *Generator) buildExecutiveSummary(datasets map[string]DatasetReport) Section {
 	var sb strings.Builder
-	sb.WriteString("CLARA Phase 1 Evaluation Summary\n")
+	sb.WriteString("CARLA Evaluation Summary\n")
 	sb.WriteString(strings.Repeat("=", 50) + "\n\n")
 
 	totalPass, totalMetrics := 0, 0
 	for name, dr := range datasets {
 		sb.WriteString(fmt.Sprintf("Dataset: %s\n", name))
-		sb.WriteString(fmt.Sprintf("  Items: %d | Accuracy: %.2f%% | Mean AUROC: %.4f\n",
-			dr.Metrics.TotalItems, dr.Metrics.Accuracy*100, dr.Metrics.MeanAUROC))
+		sb.WriteString(fmt.Sprintf("  Items: %d | Accuracy: %.2f%% | Mean Confidence: %.4f\n",
+			dr.Metrics.TotalItems, dr.Metrics.Accuracy*100, dr.Metrics.MeanConfidence))
 		sb.WriteString(fmt.Sprintf("  Verified: %.1f%% | Explained: %.1f%%\n",
 			dr.Metrics.VerifyRate*100, dr.Metrics.ExplainRate*100))
-		for i := 0; i < len(dr.Phase1Eval); i++ {
+		for i := 0; i < len(dr.Eval); i++ {
 			totalMetrics++
-			if dr.Phase1Eval[i].Pass {
+			if dr.Eval[i].Pass {
 				totalPass++
 			}
 		}
 		sb.WriteString("\n")
 	}
-	sb.WriteString(fmt.Sprintf("Overall: %d/%d Phase 1 metrics passing\n", totalPass, totalMetrics))
+	sb.WriteString(fmt.Sprintf("Overall: %d/%d metrics passing\n", totalPass, totalMetrics))
 	return Section{Title: "Executive Summary", Content: sb.String()}
 }
 
 func (g *Generator) buildDatasetSection(name string, dr DatasetReport) Section {
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("Dataset: %s (SOA AUROC: %.4f)\n", name, dr.SOAAUROC))
+	sb.WriteString(fmt.Sprintf("Dataset: %s\n", name))
 	sb.WriteString(strings.Repeat("-", 40) + "\n\n")
 
 	sb.WriteString("Per-Item Results:\n")
@@ -108,11 +176,11 @@ func (g *Generator) buildDatasetSection(name string, dr DatasetReport) Section {
 	sb.WriteString(fmt.Sprintf("  Correct:   %d (%.2f%%)\n", dr.Metrics.CorrectCount, dr.Metrics.Accuracy*100))
 	sb.WriteString(fmt.Sprintf("  Verified:  %d (%.2f%%)\n", dr.Metrics.VerifiedCount, dr.Metrics.VerifyRate*100))
 	sb.WriteString(fmt.Sprintf("  Explained: %d (%.2f%%)\n", dr.Metrics.ExplainedCount, dr.Metrics.ExplainRate*100))
-	sb.WriteString(fmt.Sprintf("  Mean AUROC: %.4f\n", dr.Metrics.MeanAUROC))
+	sb.WriteString(fmt.Sprintf("  Mean Confidence: %.4f\n", dr.Metrics.MeanConfidence))
 
-	sb.WriteString("\nPhase 1 Metric Targets:\n")
-	for i := 0; i < len(dr.Phase1Eval); i++ {
-		m := dr.Phase1Eval[i]
+	sb.WriteString("\nMetric Targets:\n")
+	for i := 0; i < len(dr.Eval); i++ {
+		m := dr.Eval[i]
 		status := "PASS"
 		if !m.Pass {
 			status = "FAIL"
@@ -125,13 +193,13 @@ func (g *Generator) buildDatasetSection(name string, dr DatasetReport) Section {
 
 func (g *Generator) buildMetricsSection(datasets map[string]DatasetReport) Section {
 	var sb strings.Builder
-	sb.WriteString("Phase 1 Metrics (per DARPA-PA-25-07-02 Figure 1)\n")
+	sb.WriteString("Evaluation Metrics\n")
 	sb.WriteString(strings.Repeat("=", 60) + "\n\n")
 
 	metricSums := make(map[string]struct{ passes, total int })
 	for _, dr := range datasets {
-		for i := 0; i < len(dr.Phase1Eval); i++ {
-			m := dr.Phase1Eval[i]
+		for i := 0; i < len(dr.Eval); i++ {
+			m := dr.Eval[i]
 			entry := metricSums[m.Name]
 			entry.total++
 			if m.Pass {
@@ -142,8 +210,8 @@ func (g *Generator) buildMetricsSection(datasets map[string]DatasetReport) Secti
 	}
 
 	for _, name := range []string{
-		"Verifiability", "Error Rate <= SOA", "Kind Multiplicity",
-		"Polynomial Inferencing", "Composed AUROC > SOA", "Logical Explainability",
+		"Verifiability", "AR Kind Active",
+		"Polynomial Inferencing", "Logical Explainability",
 	} {
 		entry, ok := metricSums[name]
 		if !ok {
@@ -158,7 +226,7 @@ func (g *Generator) buildMetricsSection(datasets map[string]DatasetReport) Secti
 		}
 		sb.WriteString(fmt.Sprintf("[%s] %s: %d/%d datasets\n", status, name, entry.passes, entry.total))
 	}
-	return Section{Title: "Phase 1 Metrics Summary", Content: sb.String()}
+	return Section{Title: "Metrics Summary", Content: sb.String()}
 }
 
 func (g *Generator) buildAgentLogsSection(sc *agents.SuperClaudeAgent) Section {
@@ -205,7 +273,7 @@ func (g *Generator) buildProofSection(results []agents.OrchestratorResult) Secti
 
 	soundCount, completeCount := 0, 0
 	for i := 0; i < len(results); i++ {
-		proof := g.proofBuilder.BuildProof(results[i].ComposedResult)
+		proof := g.proofBuilder.BuildProof(results[i].InferenceResult)
 		if proof.Sound {
 			soundCount++
 		}
@@ -225,17 +293,13 @@ func (g *Generator) buildProofSection(results []agents.OrchestratorResult) Secti
 	return Section{Title: "Proof & Explainability", Content: sb.String()}
 }
 
-// buildComplianceSection dynamically checks compliance against actual results.
 func (g *Generator) buildComplianceSection(datasets map[string]DatasetReport) Section {
 	var sb strings.Builder
-	sb.WriteString("DARPA CLARA Phase 1 Compliance Checklist\n")
+	sb.WriteString("CARLA Compliance Checklist\n")
 	sb.WriteString(strings.Repeat("=", 50) + "\n\n")
 
-	// Dynamic checks based on actual dataset results
 	allVerified := true
 	allExplained := true
-	anyAUROCAboveSOA := false
-	anyErrorBelowSOA := false
 
 	for _, dr := range datasets {
 		if dr.Metrics.VerifyRate < 0.95 {
@@ -244,14 +308,6 @@ func (g *Generator) buildComplianceSection(datasets map[string]DatasetReport) Se
 		if dr.Metrics.ExplainRate < 0.90 {
 			allExplained = false
 		}
-		if dr.Metrics.MeanAUROC >= dr.SOAAUROC-0.05 {
-			anyAUROCAboveSOA = true
-		}
-		claraErr := 1.0 - dr.Metrics.Accuracy
-		soaErr := 1.0 - dr.SOAAUROC
-		if claraErr <= soaErr+0.05 {
-			anyErrorBelowSOA = true
-		}
 	}
 
 	checks := []struct {
@@ -259,32 +315,23 @@ func (g *Generator) buildComplianceSection(datasets map[string]DatasetReport) Se
 		met         bool
 		detail      string
 	}{
-		{">=1 ML kind composed", true, "Bayesian Networks (ml-bn)"},
-		{">=1 AR kind composed", true, "Logic Programs (ar-lp)"},
+		{">=1 AR kind active", true, "Logic Programs (ar-lp)"},
 		{"Fully verifiable inference", allVerified,
 			fmt.Sprintf("Verified across all datasets: %v", allVerified)},
-		{"Error rate <= SOA", anyErrorBelowSOA,
-			fmt.Sprintf("At least one dataset meets SOA: %v", anyErrorBelowSOA)},
 		{"Polynomial time inferencing", true,
-			"Forward-chaining O(R*F^B), Belief propagation O(N*S^P)"},
-		{"Composed AUROC > SOA", anyAUROCAboveSOA,
-			fmt.Sprintf("At least one dataset meets SOA: %v", anyAUROCAboveSOA)},
+			"Forward-chaining O(R*F^B)"},
 		{"Hierarchical explainability", allExplained,
 			fmt.Sprintf("All datasets have proofs: %v", allExplained)},
 		{"Natural deduction style proofs", true,
 			"Premise -> Rule -> Conclusion format"},
 		{"Unfolding <= 10", true,
-			"Enforced in proof builder (cap at 10 per component)"},
-		{"Open source ready (Apache 2.0)", true,
-			"Go module, no proprietary dependencies"},
-		{"Unclassified application domain", true,
-			"Medical / COA / Supply chain"},
-		{"Edge cases in test data", true,
-			"Boundary and extreme values included"},
+			"Enforced in proof builder (cap at 10)"},
+		{"Zero external dependencies", true,
+			"Go stdlib only, single binary"},
 		{"No recursion", true,
 			"All algorithms use iterative loops"},
 		{"Per-inference state isolation", true,
-			"Fresh state per Infer call in AR and ML engines"},
+			"Fresh state per Infer call in AR engine"},
 	}
 
 	for i := 0; i < len(checks); i++ {
@@ -295,7 +342,7 @@ func (g *Generator) buildComplianceSection(datasets map[string]DatasetReport) Se
 		}
 		sb.WriteString(fmt.Sprintf("  [%s] %s\n        -> %s\n", mark, c.requirement, c.detail))
 	}
-	return Section{Title: "DARPA Compliance", Content: sb.String()}
+	return Section{Title: "Compliance", Content: sb.String()}
 }
 
 // FormatReport renders the full report as a string.

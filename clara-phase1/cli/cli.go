@@ -1,5 +1,5 @@
 // Package cli provides an interactive CLI with questionnaire-driven configuration
-// for the CLARA Phase 1 system. All parameters are dynamic — nothing is hardcoded
+// for the CARLA system. All parameters are dynamic — nothing is hardcoded
 // in the pipeline. Users answer questions to configure datasets, kinds, strategies,
 // agents, and metric targets before each run.
 package cli
